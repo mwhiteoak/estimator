@@ -1,0 +1,23 @@
+{
+  "name": "insulation-takeoff-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local backend for the Insulation Take-Off app: Anthropic extraction, deterministic compute, ExcelJS export.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "better-sqlite3": "^11.3.0",
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}

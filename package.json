@@ -1,0 +1,16 @@
+{
+  "name": "insulation-takeoff",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local insulation take-off app — Claude reads plans + energy report, code computes the take-off, ExcelJS exports a formula-driven workbook.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup": "cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev"
+  }
+}

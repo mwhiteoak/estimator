@@ -1,0 +1,14 @@
+# Secrets & local state — NEVER commit
+server/config.json
+server/db/*.db
+server/db/*.db-wal
+server/db/*.db-shm
+server/test/out/
+
+# Dependencies & build output
+node_modules/
+client/dist/
+
+# Misc
+.DS_Store
+*.log
