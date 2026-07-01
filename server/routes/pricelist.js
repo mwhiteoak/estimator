@@ -13,12 +13,12 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { code, name, category, unit, default_supply_rate, default_install_rate, notes } = req.body || {};
+  const { code, name, category, unit, default_supply_rate, default_install_rate, wastage_pct, notes } = req.body || {};
   if (!name || !category) return res.status(400).json({ error: 'name and category are required' });
   const info = db
     .prepare(
-      `INSERT INTO products (code, name, category, unit, default_supply_rate, default_install_rate, notes, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+      `INSERT INTO products (code, name, category, unit, default_supply_rate, default_install_rate, wastage_pct, notes, active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
     )
     .run(
       code || '',
@@ -27,6 +27,7 @@ router.post('/', (req, res) => {
       unit || 'm2',
       num(default_supply_rate),
       num(default_install_rate),
+      num(wastage_pct),
       notes || ''
     );
   res.json(db.prepare('SELECT * FROM products WHERE id = ?').get(info.lastInsertRowid));
@@ -37,7 +38,7 @@ router.put('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'not found' });
   const b = req.body || {};
   db.prepare(
-    `UPDATE products SET code=?, name=?, category=?, unit=?, default_supply_rate=?, default_install_rate=?, notes=?, active=?
+    `UPDATE products SET code=?, name=?, category=?, unit=?, default_supply_rate=?, default_install_rate=?, wastage_pct=?, notes=?, active=?
      WHERE id=?`
   ).run(
     b.code ?? existing.code,
@@ -46,6 +47,7 @@ router.put('/:id', (req, res) => {
     b.unit ?? existing.unit,
     b.default_supply_rate != null ? num(b.default_supply_rate) : existing.default_supply_rate,
     b.default_install_rate != null ? num(b.default_install_rate) : existing.default_install_rate,
+    b.wastage_pct != null ? num(b.wastage_pct) : existing.wastage_pct,
     b.notes ?? existing.notes,
     b.active != null ? (b.active ? 1 : 0) : existing.active,
     req.params.id

@@ -21,18 +21,38 @@ if (productCount === 0) {
   console.log('[db] Seeded price list + sample builders from seed.sql');
 }
 
+// Column migration: add wastage_pct (% extra material ordered for cuts/
+// offcuts, applied to the supply quantity only) to a database created before
+// this column existed. Sensible category defaults are set once, at the
+// moment the column is added — a database that already has the column keeps
+// whatever the user has since edited.
+const CATEGORY_WASTAGE_DEFAULTS = {
+  external_wall: 10, garage_wall: 10, ceiling: 10, ceiling_outdoor: 10,
+  special_wall: 10, acoustic: 10, wall_wrap: 5, subfloor_wrap: 5,
+  roof_sarking: 5, sealant: 5,
+};
+const productColumns = db.prepare('PRAGMA table_info(products)').all().map((c) => c.name);
+if (!productColumns.includes('wastage_pct')) {
+  db.exec('ALTER TABLE products ADD COLUMN wastage_pct REAL DEFAULT 0');
+  const setWastage = db.prepare('UPDATE products SET wastage_pct = ? WHERE category = ?');
+  for (const [category, pct] of Object.entries(CATEGORY_WASTAGE_DEFAULTS)) {
+    setWastage.run(pct, category);
+  }
+  console.log('[db] Added products.wastage_pct and set category defaults');
+}
+
 // Lightweight migration: add starter products for categories introduced after
 // the initial seed, without touching a database that's already been edited.
 // Insert-if-missing by code, so this is safe to run on every startup.
 const NEW_DEFAULT_PRODUCTS = [
-  ['WRAP_FOIL', 'Reflective foil sarking wall wrap', 'wall_wrap', 'm2', 3.2, 3.0, 'Reflective foil sarking to external framed walls'],
-  ['WRAP_SUBFLOOR', 'Subfloor wrap', 'subfloor_wrap', 'm2', 3.5, 3.5, 'Vapour-permeable wrap to suspended subfloor'],
-  ['SEAL_CONT', 'Continuous draught / gap sealing', 'sealant', 'lm', 2.0, 3.0, 'Continuous sealant/foam bead at specified junctions'],
+  ['WRAP_FOIL', 'Reflective foil sarking wall wrap', 'wall_wrap', 'm2', 3.2, 3.0, 5, 'Reflective foil sarking to external framed walls'],
+  ['WRAP_SUBFLOOR', 'Subfloor wrap', 'subfloor_wrap', 'm2', 3.5, 3.5, 5, 'Vapour-permeable wrap to suspended subfloor'],
+  ['SEAL_CONT', 'Continuous draught / gap sealing', 'sealant', 'lm', 2.0, 3.0, 5, 'Continuous sealant/foam bead at specified junctions'],
 ];
 const hasProductCode = db.prepare('SELECT 1 FROM products WHERE code = ?');
 const insertProduct = db.prepare(
-  `INSERT INTO products (code, name, category, unit, default_supply_rate, default_install_rate, notes, active)
-   VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  `INSERT INTO products (code, name, category, unit, default_supply_rate, default_install_rate, wastage_pct, notes, active)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
 );
 if (productCount > 0) {
   for (const p of NEW_DEFAULT_PRODUCTS) {

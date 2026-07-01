@@ -186,6 +186,11 @@ router.post(
 
       if (projectPreview) {
         const fullProject = takeoff.project || {};
+        const fullSchedule = fullProject.area_schedule || {};
+        const previewSchedule = projectPreview.area_schedule || {};
+        const scheduleKeys = ['ground_floor_m2', 'first_floor_m2', 'garage_m2', 'alfresco_m2', 'porch_m2', 'total_m2'];
+        const areaSchedule = {};
+        for (const k of scheduleKeys) areaSchedule[k] = fullSchedule[k] ?? previewSchedule[k] ?? null;
         takeoff.project = {
           ...projectPreview,
           ...fullProject,
@@ -199,6 +204,7 @@ router.post(
           drawing_number: fullProject.drawing_number || projectPreview.drawing_number || null,
           address_source: fullProject.address_source || projectPreview.address_source || 'missing',
           confidence: fullProject.confidence || projectPreview.confidence || 'medium',
+          area_schedule: areaSchedule,
         };
       }
 

@@ -267,9 +267,9 @@ function buildContinuousItems(ws, m) {
 }
 
 function buildQuote(ws, result) {
-  setCols(ws, [28, 30, 10, 10, 8, 13, 13, 14, 30]);
+  setCols(ws, [28, 30, 10, 10, 8, 11, 11, 13, 13, 14, 30]);
   const header = ws.addRow([
-    'Line', 'Product', 'R-value', 'Qty', 'Unit', 'Supply $', 'Install $', 'Line $', 'Notes',
+    'Line', 'Product', 'R-value', 'Qty', 'Unit', 'Wastage %', 'Order Qty', 'Supply $', 'Install $', 'Line $', 'Notes',
   ]);
   styleHeaderRow(header);
   const lines = result.quote.lines;
@@ -282,6 +282,8 @@ function buildQuote(ws, result) {
       l.r_value || '',
       l.qty,
       l.unit || 'm2',
+      l.wastage_pct || 0,
+      null,
       l.supply_rate,
       l.install_rate,
       null,
@@ -290,19 +292,20 @@ function buildQuote(ws, result) {
     const n = row.number;
     if (firstDataRow == null) firstDataRow = n;
     lastDataRow = n;
-    row.getCell(8).value = { formula: `IF(OR(F${n}="",G${n}=""),"",D${n}*(F${n}+G${n}))` };
-    row.getCell(4).numFmt = M2;
-    [6, 7, 8].forEach((c) => (row.getCell(c).numFmt = MONEY));
+    row.getCell(7).value = { formula: `D${n}*(1+F${n}/100)` }; // Order qty (supply + wastage)
+    row.getCell(10).value = { formula: `IF(OR(H${n}="",I${n}=""),"",D${n}*I${n}+G${n}*H${n})` }; // Line $
+    [4, 6, 7].forEach((c) => (row.getCell(c).numFmt = M2));
+    [8, 9, 10].forEach((c) => (row.getCell(c).numFmt = MONEY));
     if (l.flagged) row.eachCell((c) => (c.fill = FLAG_FILL));
   }
   if (firstDataRow != null) {
-    const totalRow = ws.addRow(['', '', '', '', '', '', 'Quote total', null, '']);
-    totalRow.getCell(8).value = {
-      formula: `IF(COUNTBLANK(H${firstDataRow}:H${lastDataRow})>0,"",SUM(H${firstDataRow}:H${lastDataRow}))`,
+    const totalRow = ws.addRow(['', '', '', '', '', '', '', '', 'Quote total', null, '']);
+    totalRow.getCell(10).value = {
+      formula: `IF(COUNTBLANK(J${firstDataRow}:J${lastDataRow})>0,"",SUM(J${firstDataRow}:J${lastDataRow}))`,
     };
-    totalRow.getCell(8).numFmt = MONEY;
+    totalRow.getCell(10).numFmt = MONEY;
     totalRow.font = { bold: true };
-    totalRow.getCell(7).font = { bold: true };
+    totalRow.getCell(9).font = { bold: true };
   }
 }
 
@@ -351,12 +354,32 @@ function buildSummary(ws, result, hasQuote) {
   }
 
   if (hasQuote) {
-    const q = ws.addRow(['Quote total', { formula: 'SUMIF(Quote!G:G,"Quote total",Quote!H:H)' }, 'Quote']);
+    const q = ws.addRow(['Quote total', { formula: 'SUMIF(Quote!I:I,"Quote total",Quote!J:J)' }, 'Quote']);
     q.getCell(2).numFmt = MONEY;
     q.font = { bold: true };
   } else {
     const q = ws.addRow(['Quote', 'Not priced (measurements only)', 'See Assumptions & Notes']);
     q.getCell(2).font = { italic: true };
+  }
+
+  const sched = p.area_schedule || {};
+  const hasSchedule = Object.values(sched).some((v) => v != null);
+  if (hasSchedule) {
+    ws.addRow([]);
+    const schedHead = ws.addRow(['Site plan area schedule (reference)', 'Value', 'Source']);
+    styleHeaderRow(schedHead);
+    const schedRows = [
+      ['Ground floor m²', sched.ground_floor_m2],
+      ['First floor m²', sched.first_floor_m2],
+      ['Garage m²', sched.garage_m2],
+      ['Alfresco m²', sched.alfresco_m2],
+      ['Porch m²', sched.porch_m2],
+      ['Total m² (per site plan)', sched.total_m2],
+    ];
+    for (const [label, val] of schedRows) {
+      const row = ws.addRow([label, val == null ? '' : val, 'Site plan']);
+      if (val != null) row.getCell(2).numFmt = M2;
+    }
   }
 }
 

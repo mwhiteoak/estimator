@@ -33,6 +33,8 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
 
   const setSection = (key, value) => setTakeoff({ ...t, [key]: value });
   const setProject = (field, value) => setTakeoff({ ...t, project: { ...t.project, [field]: value } });
+  const setAreaSchedule = (field, value) =>
+    setTakeoff({ ...t, project: { ...t.project, area_schedule: { ...t.project?.area_schedule, [field]: value } } });
   const setEnergy = (field, value) => setTakeoff({ ...t, energy_report: { ...t.energy_report, [field]: value } });
   const setResolution = (key, value) =>
     setTakeoff({ ...t, user_resolutions: { ...(t.user_resolutions || {}), [key]: value } });
@@ -148,6 +150,25 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
               </Banner>
             </div>
           )}
+
+          <div className="mt-4 border-t pt-4">
+            <p className="mb-2 text-xs font-semibold uppercase text-gray-500">
+              Area schedule (from the site plan) — reference only, used to sanity-check the ceiling take-off
+            </p>
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+              <NumberField label="Ground floor" value={t.project?.area_schedule?.ground_floor_m2} onChange={(v) => setAreaSchedule('ground_floor_m2', v)} />
+              <NumberField label="First floor" value={t.project?.area_schedule?.first_floor_m2} onChange={(v) => setAreaSchedule('first_floor_m2', v)} />
+              <NumberField label="Garage" value={t.project?.area_schedule?.garage_m2} onChange={(v) => setAreaSchedule('garage_m2', v)} />
+              <NumberField label="Alfresco" value={t.project?.area_schedule?.alfresco_m2} onChange={(v) => setAreaSchedule('alfresco_m2', v)} />
+              <NumberField label="Porch" value={t.project?.area_schedule?.porch_m2} onChange={(v) => setAreaSchedule('porch_m2', v)} />
+              <NumberField label="Total" value={t.project?.area_schedule?.total_m2} onChange={(v) => setAreaSchedule('total_m2', v)} />
+            </div>
+            {s && (
+              <p className="mt-2 text-xs text-gray-400">
+                Computed ceiling gross area: {n2(s.ceiling_gross_m2)} m² — compare against Total above.
+              </p>
+            )}
+          </div>
           {builderMatch?.matched && (
             <p className="mt-3 text-sm text-green-700">
               ✓ Matched builder profile: <strong>{builderMatch.builderName}</strong> ({Math.round(builderMatch.score * 100)}% · {builderMatch.reason})
@@ -359,6 +380,20 @@ function Field({ label, value, onChange }) {
     <label className="block">
       <span className="mb-1 block text-xs font-medium text-gray-500">{label}</span>
       <input className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function NumberField({ label, value, onChange }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-gray-500">{label} m²</span>
+      <input
+        type="number" step="any"
+        className="input"
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+      />
     </label>
   );
 }

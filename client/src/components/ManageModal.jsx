@@ -103,7 +103,7 @@ function SettingsTab({ onData }) {
   );
 }
 
-const BLANK_PRODUCT = { code: '', name: '', category: 'external_wall', unit: 'm2', default_supply_rate: 0, default_install_rate: 0, notes: '' };
+const BLANK_PRODUCT = { code: '', name: '', category: 'external_wall', unit: 'm2', default_supply_rate: 0, default_install_rate: 0, wastage_pct: 10, notes: '' };
 const CATEGORIES = ['external_wall', 'garage_wall', 'ceiling', 'ceiling_outdoor', 'special_wall', 'acoustic', 'wall_wrap', 'subfloor_wrap', 'sealant', 'roof_sarking'];
 
 function ProductsTab({ onData }) {
@@ -124,7 +124,7 @@ function ProductsTab({ onData }) {
           <thead>
             <tr>
               <th className="th">Code</th><th className="th">Name</th><th className="th">Category</th><th className="th">Unit</th>
-              <th className="th text-right">Supply $</th><th className="th text-right">Install $</th>
+              <th className="th text-right">Supply $</th><th className="th text-right">Install $</th><th className="th text-right">Wastage %</th>
               <th className="th">Active</th><th className="th" />
             </tr>
           </thead>
@@ -146,6 +146,7 @@ function ProductsTab({ onData }) {
                 </td>
                 <td className="td"><input type="number" step="any" className="cell-input w-20 text-right" defaultValue={p.default_supply_rate} onBlur={(e) => update(p.id, { default_supply_rate: Number(e.target.value) })} /></td>
                 <td className="td"><input type="number" step="any" className="cell-input w-20 text-right" defaultValue={p.default_install_rate} onBlur={(e) => update(p.id, { default_install_rate: Number(e.target.value) })} /></td>
+                <td className="td"><input type="number" step="any" className="cell-input w-16 text-right" defaultValue={p.wastage_pct || 0} title="Extra material ordered for cuts/offcuts — applied to supply cost only" onBlur={(e) => update(p.id, { wastage_pct: Number(e.target.value) })} /></td>
                 <td className="td">
                   <input type="checkbox" className="h-4 w-4 accent-blue-600" checked={!!p.active} onChange={(e) => update(p.id, { active: e.target.checked ? 1 : 0 })} />
                 </td>
@@ -173,6 +174,7 @@ function ProductsTab({ onData }) {
           </Mini>
           <Mini label="Supply $"><input type="number" step="any" className="input w-24" value={draft.default_supply_rate} onChange={(e) => setDraft({ ...draft, default_supply_rate: Number(e.target.value) })} /></Mini>
           <Mini label="Install $"><input type="number" step="any" className="input w-24" value={draft.default_install_rate} onChange={(e) => setDraft({ ...draft, default_install_rate: Number(e.target.value) })} /></Mini>
+          <Mini label="Wastage %"><input type="number" step="any" className="input w-20" value={draft.wastage_pct} onChange={(e) => setDraft({ ...draft, wastage_pct: Number(e.target.value) })} /></Mini>
           <button className="btn-primary" onClick={add}>Add</button>
         </div>
       </div>

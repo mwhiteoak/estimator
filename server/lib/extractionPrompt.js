@@ -13,6 +13,18 @@ export const SCHEMA_EXAMPLE = {
     drawing_number: 'string | null',
     address_source: "'labelled' | 'scaled' | 'missing'",
     confidence: "'high' | 'medium' | 'low'",
+    // From the site plan's own "Area Schedule" table, if one is printed (very
+    // common on AU site plans) — used as a sanity check against the computed
+    // take-off, not as a measurement input itself. Leave any field null if
+    // that row isn't in the table; do not derive it from other sheets.
+    area_schedule: {
+      ground_floor_m2: 'number | null',
+      first_floor_m2: 'number | null',
+      garage_m2: 'number | null',
+      alfresco_m2: 'number | null',
+      porch_m2: 'number | null',
+      total_m2: 'number | null',
+    },
   },
   energy_report: {
     present: 'boolean',
@@ -112,6 +124,8 @@ Extract just the title-block/site-plan details that help a user see the job has 
 - drawing_number
 - address_source: labelled | scaled | missing
 - confidence: high | medium | low
+- area_schedule: if the site plan has its own Area Schedule table, copy its figures verbatim
+  (this is a reference figure, not something to calculate)
 
 Do not measure walls, openings, gables, or ceilings. Do not calculate anything.
 
@@ -181,7 +195,10 @@ ${JSON.stringify(energyRequirements, null, 2)}`
 
 Step 2 — Project & builder. Extract address, lot/plan number, builder, designer, client, and drawing
 revision/number from the title block / site plan. If no address is shown, set address_source="missing"
-and add a flag (the file will be named from the drawing/job number).
+and add a flag (the file will be named from the drawing/job number). If the site plan has its own
+"Area Schedule" table (Ground Floor / First Floor / Garage / Alfresco / Porch / Total, or similar),
+copy those figures into project.area_schedule exactly as printed — this is a reference figure for a
+sanity check later, not something to calculate. Leave a field null if that row isn't in the table.
 
 Step 3 — External walls. Do NOT collapse an entire elevation face into one row using only the overall
 building width/depth — that throws away the material split and overstates or understates individual

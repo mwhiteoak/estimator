@@ -280,9 +280,17 @@ function hasOwn(obj, key) {
 function resolveRate(product, builderRates, lineOverride) {
   const hasSupplyOverride = hasOwn(lineOverride, 'supply_rate');
   const hasInstallOverride = hasOwn(lineOverride, 'install_rate');
+  const hasWastageOverride = hasOwn(lineOverride, 'wastage_pct');
+  const wastagePct = hasWastageOverride
+    ? lineOverride.wastage_pct == null
+      ? 0
+      : num(lineOverride.wastage_pct)
+    : product
+    ? num(product.wastage_pct)
+    : 0;
 
   if (!product && !hasSupplyOverride && !hasInstallOverride) {
-    return { supply_rate: null, install_rate: null, rate_source: 'unmatched' };
+    return { supply_rate: null, install_rate: null, rate_source: 'unmatched', wastage_pct: wastagePct };
   }
 
   let base = { supply_rate: null, install_rate: null, rate_source: 'unmatched' };
@@ -316,10 +324,11 @@ function resolveRate(product, builderRates, lineOverride) {
           : num(lineOverride.install_rate)
         : base.install_rate,
       rate_source: 'manual override',
+      wastage_pct: wastagePct,
     };
   }
 
-  return base;
+  return { ...base, wastage_pct: wastagePct };
 }
 
 function buildQuoteLines(takeoff, measurements, price) {
@@ -340,8 +349,12 @@ function buildQuoteLines(takeoff, measurements, price) {
     const rate = resolveRate(product, builderRates, ov);
     const supply = rate.supply_rate;
     const install = rate.install_rate;
+    const wastagePct = rate.wastage_pct || 0;
+    // Wastage inflates the material ordered (supply), not the labour to
+    // install the actual net area.
+    const supplyQty = round2(qty * (1 + wastagePct / 100));
     const lineCost =
-      supply == null || install == null ? null : round2(qty * (supply + install));
+      supply == null || install == null ? null : round2(qty * install + supplyQty * supply);
     lines.push({
       id,
       label,
@@ -349,6 +362,8 @@ function buildQuoteLines(takeoff, measurements, price) {
       r_value: rEff,
       qty: round2(qty),
       unit,
+      wastage_pct: wastagePct,
+      supply_qty: supplyQty,
       product: product ? { id: product.id, code: product.code, name: product.name } : null,
       supply_rate: supply,
       install_rate: install,

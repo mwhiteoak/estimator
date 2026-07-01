@@ -134,6 +134,7 @@ export default function RatesQuote({ pricing, setPricing, computed, products, bu
                     <th className="th">Product</th>
                     <th className="th w-20">R-value</th>
                     <th className="th w-20 text-right">Qty</th>
+                    <th className="th w-20 text-right" title="Extra material ordered for cuts/offcuts — applied to supply cost only">Wastage %</th>
                     <th className="th w-28 text-right">Supply $</th>
                     <th className="th w-28 text-right">Install $</th>
                     <th className="th w-24 text-right">Line $</th>
@@ -164,7 +165,20 @@ export default function RatesQuote({ pricing, setPricing, computed, products, bu
                             onChange={(e) => setLineOverride(l.id, { r_value: e.target.value })}
                           />
                         </td>
-                        <td className="td text-right tabular-nums">{n2(l.qty)} <span className="text-gray-400">{l.unit === 'lm' ? 'lm' : 'm²'}</span></td>
+                        <td className="td text-right tabular-nums">
+                          {n2(l.qty)} <span className="text-gray-400">{l.unit === 'lm' ? 'lm' : 'm²'}</span>
+                          {l.supply_qty > l.qty && (
+                            <div className="text-xs text-gray-400">order {n2(l.supply_qty)}</div>
+                          )}
+                        </td>
+                        <td className="td">
+                          <input
+                            type="number" step="any"
+                            className="cell-input text-right tabular-nums"
+                            value={ov.wastage_pct ?? l.wastage_pct ?? 0}
+                            onChange={(e) => setLineOverride(l.id, { wastage_pct: e.target.value === '' ? null : Number(e.target.value) })}
+                          />
+                        </td>
                         <td className="td">
                           <input
                             type="number" step="any"
@@ -186,7 +200,7 @@ export default function RatesQuote({ pricing, setPricing, computed, products, bu
                     );
                   })}
                   <tr className="border-t-2">
-                    <td className="td font-bold" colSpan={6}>Quote total</td>
+                    <td className="td font-bold" colSpan={7}>Quote total</td>
                     <td className="td text-right text-base font-bold tabular-nums">{money(quote.total)}</td>
                   </tr>
                 </tbody>

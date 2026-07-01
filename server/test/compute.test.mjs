@@ -125,6 +125,26 @@ test('matches products by R-value and requires complete rates for a total', () =
   assert.equal(result.quote.anyUnpriced, true);
 });
 
+test('wastage inflates the supply quantity only, not the install labour', () => {
+  const wastedProducts = products.map((p) =>
+    p.code === 'WALL_R2.0' ? { ...p, wastage_pct: 10 } : p
+  );
+  const result = computeTakeoff(fixture(), { pricing: { mode: 'auto', products: wastedProducts, lineOverrides: {} } });
+  const brick = result.quote.lines.find((l) => l.id === 'wall:brick:ground');
+  assert.equal(brick.qty, 22); // measured net area — unchanged
+  assert.equal(brick.supply_qty, 24.2); // 22 * 1.10, ordered with 10% wastage
+  // install charged on the real 22m2, supply charged on the 24.2m2 ordered
+  assert.equal(brick.line_cost, 22 * 4 + 24.2 * 3);
+
+  // A line override can zero out wastage even when the product default has some.
+  const noWaste = computeTakeoff(fixture(), {
+    pricing: { mode: 'auto', products: wastedProducts, lineOverrides: { 'wall:brick:ground': { wastage_pct: 0 } } },
+  });
+  const brickNoWaste = noWaste.quote.lines.find((l) => l.id === 'wall:brick:ground');
+  assert.equal(brickNoWaste.supply_qty, 22);
+  assert.equal(brickNoWaste.line_cost, 154);
+});
+
 test('manual rate override preserves the unedited side from product defaults', () => {
   const result = computeTakeoff(fixture(), {
     pricing: { mode: 'auto', products, lineOverrides: { 'wall:brick:ground': { supply_rate: 10 } } },
@@ -154,12 +174,30 @@ test('validation flags suspicious dimensions and missing quote rates', () => {
   assert.ok(result.validation.issues.some((i) => i.id.startsWith('quote-unpriced')));
 });
 
+test('flags a mismatch between computed ceiling area and the site plan area schedule', () => {
+  const mismatched = computeTakeoff(
+    fixture({ project: { address: 'Unit Test', area_schedule: { ground_floor_m2: 200, first_floor_m2: null, garage_m2: null, alfresco_m2: null, porch_m2: null, total_m2: 200 } } }),
+    { pricing: { mode: 'none' } }
+  );
+  // fixture()'s ceiling gross is 65m2 vs a 200m2 schedule total — well outside tolerance.
+  assert.ok(mismatched.validation.issues.some((i) => i.id === 'area-schedule-mismatch'));
+
+  const matched = computeTakeoff(
+    fixture({ project: { address: 'Unit Test', area_schedule: { ground_floor_m2: 65, first_floor_m2: null, garage_m2: null, alfresco_m2: null, porch_m2: null, total_m2: 65 } } }),
+    { pricing: { mode: 'none' } }
+  );
+  assert.ok(!matched.validation.issues.some((i) => i.id === 'area-schedule-mismatch'));
+
+  const noSchedule = computeTakeoff(fixture(), { pricing: { mode: 'none' } });
+  assert.ok(!noSchedule.validation.issues.some((i) => i.id === 'area-schedule-mismatch'));
+});
+
 test('workbook quote formulas leave incomplete totals blank', async () => {
   const result = computeTakeoff(fixture(), { pricing: { mode: 'auto', products, lineOverrides: {} } });
   const wb = await buildWorkbook(result);
   const quote = wb.getWorksheet('Quote');
-  const firstLineFormula = quote.getRow(2).getCell(8).value.formula;
-  const totalFormula = quote.getRow(quote.rowCount).getCell(8).value.formula;
+  const firstLineFormula = quote.getRow(2).getCell(10).value.formula;
+  const totalFormula = quote.getRow(quote.rowCount).getCell(10).value.formula;
   assert.match(firstLineFormula, /IF\(OR/);
   assert.match(totalFormula, /COUNTBLANK/);
 });

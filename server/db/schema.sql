@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS products (
   unit TEXT DEFAULT 'm2',
   default_supply_rate REAL,  -- $ / m2
   default_install_rate REAL, -- $ / m2 (allow 0 if supply-only)
+  wastage_pct REAL DEFAULT 0,-- % extra material ordered for cuts/offcuts (supply qty only, not install)
   notes TEXT,
   active INTEGER DEFAULT 1
 );

@@ -93,6 +93,31 @@ export function validateTakeoff(takeoff, measurements, quote) {
     }
   }
 
+  // Cross-check against the site plan's own Area Schedule table, if one was
+  // extracted — the same sanity check a human estimator does by eye before
+  // trusting a take-off in isolation.
+  const areaSchedule = t.project?.area_schedule || {};
+  const scheduleParts = ['ground_floor_m2', 'first_floor_m2', 'garage_m2', 'alfresco_m2', 'porch_m2']
+    .map((k) => areaSchedule[k])
+    .filter((v) => v != null)
+    .map(num);
+  const scheduleTotal = areaSchedule.total_m2 != null ? num(areaSchedule.total_m2) : round2(scheduleParts.reduce((s, v) => s + v, 0));
+  if (scheduleTotal > 0 && ceilingGross > 0) {
+    const ratio = ceilingGross / scheduleTotal;
+    if (ratio < 0.85 || ratio > 1.15) {
+      issues.push(
+        issue(
+          'area-schedule-mismatch',
+          'warn',
+          `Computed ceiling gross area (${round2(ceilingGross)}m2) doesn't match the site plan's Area Schedule total (${scheduleTotal}m2).`,
+          { section: 'ceilings', page: null },
+          'Check ceiling areas against the site plan Area Schedule, or correct the area_schedule reference values if they were misread.',
+          'Confirm ceiling areas match the site plan Area Schedule (Ground/First Floor + Garage + Alfresco + Porch), or fix whichever side is wrong.'
+        )
+      );
+    }
+  }
+
   const reqs = t.energy_report?.requirements || [];
   const seenReqs = new Map();
   for (const [i, req] of reqs.entries()) {
