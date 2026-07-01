@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
+import { api } from '../lib/api.js';
 import { Card, Banner, FlagBadge } from '../components/ui.jsx';
 import { EditableTable } from '../components/EditableTable.jsx';
 import { PlanPreview, ReviewIssue, SourceCell } from '../components/PlanReview.jsx';
+import PlanDigitizer from '../components/PlanDigitizer.jsx';
 
 const MATERIALS = ['lightweight', 'brick', 'hebel'];
 const LEVELS = ['ground', 'first'];
 const WRAP_LEVELS = ['ground', 'first', 'subfloor', 'gable'];
-const SOURCES = ['labelled', 'scaled', 'schedule', 'code', 'area_schedule', 'floor_plan'];
+const SOURCES = ['labelled', 'scaled', 'schedule', 'code', 'area_schedule', 'floor_plan', 'digitized'];
 const CONF = ['high', 'medium', 'low'];
 const REQ_ELEMENTS = ['external_wall', 'special_wall', 'garage_wall', 'ceiling', 'ceiling_outdoor', 'roof', 'wall_wrap', 'subfloor_wrap', 'continuous_sealing'];
 
@@ -29,9 +31,24 @@ function useObjectUrl(file) {
 export default function Review({ takeoff, setTakeoff, computed, builderMatch, plansFile, onBack, onNext }) {
   const t = takeoff;
   const [selectedSource, setSelectedSource] = useState(null);
+  const [digitizerOpen, setDigitizerOpen] = useState(false);
+  const [templateMsg, setTemplateMsg] = useState(null);
   const plansUrl = useObjectUrl(plansFile);
 
+  const saveAsTemplate = async () => {
+    const name = window.prompt('Template name (e.g. "Hancock — The Ashford 4 bed"):', t.project?.builder ? `${t.project.builder} — ` : '');
+    if (!name) return;
+    try {
+      await api.saveTemplate({ name, builder: t.project?.builder || '', takeoff: t });
+      setTemplateMsg('Saved as template.');
+      setTimeout(() => setTemplateMsg(null), 3000);
+    } catch (e) {
+      setTemplateMsg('Save failed: ' + e.message);
+    }
+  };
+
   const setSection = (key, value) => setTakeoff({ ...t, [key]: value });
+  const addDigitizedWalls = (walls) => setSection('walls_external', [...(t.walls_external || []), ...walls]);
   const setProject = (field, value) => setTakeoff({ ...t, project: { ...t.project, [field]: value } });
   const setAreaSchedule = (field, value) =>
     setTakeoff({ ...t, project: { ...t.project, area_schedule: { ...t.project?.area_schedule, [field]: value } } });
@@ -132,7 +149,22 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
           </div>
         </Card>
 
-        <Card title="Project & builder">
+        <Card
+          title="Project & builder"
+          action={
+            <div className="flex items-center gap-2">
+              {templateMsg && <span className="text-xs text-gray-500">{templateMsg}</span>}
+              <button
+                type="button"
+                onClick={saveAsTemplate}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10"
+                title="Save these measurements as a reusable house-type template"
+              >
+                💾 Save as template
+              </button>
+            </div>
+          }
+        >
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Address" value={t.project?.address} onChange={(v) => setProject('address', v)} />
             <Field label="Builder" value={t.project?.builder} onChange={(v) => setProject('builder', v)} />
@@ -205,7 +237,23 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
           />
         </Card>
 
-        <Card id="walls_external" title="External walls" subtitle="One row per wall segment. Gross = length × height. Doors are deducted at material × level group level.">
+        <Card
+          id="walls_external"
+          title="External walls"
+          subtitle="One row per wall segment. Gross = length × height. Doors are deducted at material × level group level."
+          action={
+            plansFile && (
+              <button
+                type="button"
+                onClick={() => setDigitizerOpen(true)}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10"
+                title="Calibrate a scale and auto-measure walls from the plan"
+              >
+                📐 Digitize walls
+              </button>
+            )
+          }
+        >
           <EditableTable
             columns={[
               { key: 'level', label: 'Level', type: 'select', options: LEVELS, width: 90 },
@@ -371,6 +419,10 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
       </div>
 
       <PlanPreview fileUrl={plansUrl} source={selectedSource} />
+
+      {digitizerOpen && plansFile && (
+        <PlanDigitizer file={plansFile} onClose={() => setDigitizerOpen(false)} onAddWalls={addDigitizedWalls} />
+      )}
     </div>
   );
 }

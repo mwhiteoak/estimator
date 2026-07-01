@@ -52,6 +52,24 @@ the AI's first read:
 - Missing-dimension checks across walls, doors, gables, garage walls, wrap, and continuous items —
   gaps are flagged for the user rather than silently priced at zero.
 
+## Plan Digitizer
+
+For plans where dimensions aren't reliably printed or readable, Review has a "📐 Digitize walls"
+tool: click two points a known distance apart on the rendered plan page (a printed dimension works
+well) to set a scale, then auto-measure. The measurement itself is a small script, not a second AI
+guess — the *exact* image the user calibrated is sent to Claude with a prompt asking only for pixel
+coordinates of each wall run's endpoints, never a length reading, and the server converts pixels to
+metres deterministically using the calibration. This sidesteps having to OCR small printed dimension
+text entirely. Results are shown as a checklist the user reviews before adding any of them to the
+take-off.
+
+## House-Type Templates
+
+Since a builder typically reuses the same design across many lots, a reviewed take-off can be saved
+as a template ("💾 Save as template" in Review). Starting a new job from a template drops straight
+into Review with all the measurements pre-filled — the AI extraction pass is skipped entirely — and
+only the site-specific fields (address, lot, drawing number) are cleared for the user to fill in.
+
 ## App Flow
 
 ```text
@@ -62,9 +80,12 @@ During review, the user can:
 
 - edit extracted quantities;
 - inspect source page references;
-- view the uploaded plan beside the data;
+- view the uploaded plan beside the data, or digitize walls directly off it;
 - resolve or ignore review items;
 - rerun live calculations automatically as values change.
+
+At Export, "📋 Copy details" copies a plain-text summary (address, headline totals, quote total) to
+the clipboard for pasting into an email or CRM.
 
 ## Run Locally
 

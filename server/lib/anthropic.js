@@ -24,6 +24,16 @@ export function pdfBlock(base64, title, cache = false) {
   };
 }
 
+// Build a base64 image content block — used for the digitizer, where the
+// client renders one plan page to a canvas at a known pixel scale and we ask
+// Claude for pixel coordinates on that exact image (not a length reading).
+export function imageBlock(base64, mediaType = 'image/png') {
+  return {
+    type: 'image',
+    source: { type: 'base64', media_type: mediaType, data: base64 },
+  };
+}
+
 // Stream a single extraction call. Calls onText(chunk) as text arrives so the
 // caller can surface live progress. Returns the full concatenated text.
 // `model` / `maxTokens` are per-call so a long energy report can use a faster

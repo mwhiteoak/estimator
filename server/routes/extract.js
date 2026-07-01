@@ -2,16 +2,18 @@ import express from 'express';
 import multer from 'multer';
 import db from '../db/db.js';
 import { readConfig } from '../lib/config.js';
-import { streamExtraction, pdfBlock } from '../lib/anthropic.js';
+import { streamExtraction, pdfBlock, imageBlock } from '../lib/anthropic.js';
 import {
   buildAddressCheckInstructions,
   buildEnergyInstructions,
   buildPlansInstructions,
   buildProjectPreviewInstructions,
+  buildWallDigitizeInstructions,
   parseExtraction,
 } from '../lib/extractionPrompt.js';
 import { matchBuilder } from '../lib/fuzzyMatch.js';
 import { compareAddresses } from '../lib/addressMatch.js';
+import { round2 } from '../lib/normalize.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -67,6 +69,54 @@ router.post(
     }
   }
 );
+
+// POST /api/extract/digitize-walls  { image: 'data:image/png;base64,...', pxPerMetre, pageLabel? }
+// The user calibrates a scale by clicking two points a known distance apart
+// on a rendered plan page; we send that exact image and ask only for pixel
+// coordinates (never a length reading), then convert to metres deterministically
+// using the calibration — so the model never has to OCR a printed dimension.
+router.post('/digitize-walls', async (req, res) => {
+  const { image, pxPerMetre, pageLabel } = req.body || {};
+  if (!image || typeof image !== 'string') return res.status(400).json({ error: 'image (data URL) is required' });
+  const px = Number(pxPerMetre);
+  if (!Number.isFinite(px) || px <= 0) return res.status(400).json({ error: 'pxPerMetre must be a positive number' });
+
+  const match = image.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/);
+  if (!match) return res.status(400).json({ error: 'image must be a base64 data URL (image/png or image/jpeg)' });
+  const [, mediaType, base64] = match;
+
+  const { apiKey, model } = readConfig();
+  if (!apiKey) return res.status(400).json({ error: 'No Anthropic API key configured. Add one in Settings.', code: 'NO_API_KEY' });
+
+  try {
+    const { text } = await streamExtraction({
+      content: [imageBlock(base64, mediaType), { type: 'text', text: buildWallDigitizeInstructions() }],
+      model,
+      maxTokens: 8000,
+    });
+    const parsed = parseExtraction(text);
+    const walls = (parsed.walls || []).map((w) => {
+      const length_m = round2(Math.hypot(w.x2 - w.x1, w.y2 - w.y1) / px);
+      return {
+        level: null,
+        location: w.location || '',
+        material: null,
+        length_m,
+        height_m: null,
+        orientation: w.orientation || null,
+        source: 'digitized',
+        confidence: 'high',
+        notes: pageLabel ? `Auto-measured from ${pageLabel} using a user-calibrated scale.` : 'Auto-measured using a user-calibrated scale.',
+        _pixels: { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 },
+      };
+    });
+    res.json({ walls });
+  } catch (e) {
+    const code = e.status === 401 ? 'BAD_KEY' : e.code || undefined;
+    const msg = e.status === 401 ? 'Anthropic rejected the API key (401).' : `Digitize failed: ${e.message}`;
+    res.status(500).json({ error: msg, code });
+  }
+});
 
 // POST /api/extract  (multipart: plans=<pdf> [energyReport=<pdf>])
 // Streams newline-delimited JSON progress events, then a final {type:'done'}.

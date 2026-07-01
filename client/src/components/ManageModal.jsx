@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { Banner } from './ui.jsx';
 
-export default function ManageModal({ tab: initialTab, onClose, onData, onLoadJob }) {
+export default function ManageModal({ tab: initialTab, onClose, onData, onLoadJob, onLoadTemplate }) {
   const [tab, setTab] = useState(initialTab || 'settings');
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onClick={onClose}>
@@ -14,6 +14,7 @@ export default function ManageModal({ tab: initialTab, onClose, onData, onLoadJo
               ['products', 'Price List'],
               ['builders', 'Builders'],
               ['jobs', 'Saved Jobs'],
+              ['templates', 'House Templates'],
             ].map(([k, label]) => (
               <button
                 key={k}
@@ -31,6 +32,7 @@ export default function ManageModal({ tab: initialTab, onClose, onData, onLoadJo
           {tab === 'products' && <ProductsTab onData={onData} />}
           {tab === 'builders' && <BuildersTab onData={onData} />}
           {tab === 'jobs' && <JobsTab onLoadJob={onLoadJob} onClose={onClose} />}
+          {tab === 'templates' && <TemplatesTab onLoadTemplate={onLoadTemplate} onClose={onClose} />}
         </div>
       </div>
     </div>
@@ -275,6 +277,41 @@ function JobsTab({ onLoadJob, onClose }) {
             <td className="td text-right">
               <button className="btn-ghost mr-2" onClick={() => open(j.id)}>Open</button>
               <button className="text-gray-300 hover:text-red-500" onClick={() => del(j.id)}>✕</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function TemplatesTab({ onLoadTemplate, onClose }) {
+  const [templates, setTemplates] = useState([]);
+  const load = () => api.listTemplates().then(setTemplates);
+  useEffect(() => { load(); }, []);
+  const open = async (id) => { const t = await api.getTemplate(id); onLoadTemplate(t); onClose(); };
+  const del = async (id) => { await api.deleteTemplate(id); load(); };
+
+  if (!templates.length) {
+    return (
+      <Banner tone="info">
+        No house-type templates yet. On the Review step of a completed take-off, use "Save as template" to reuse
+        this house type's measurements on a future lot without re-running extraction.
+      </Banner>
+    );
+  }
+  return (
+    <table className="w-full text-sm">
+      <thead><tr><th className="th">Name</th><th className="th">Builder</th><th className="th">Created</th><th className="th" /></tr></thead>
+      <tbody>
+        {templates.map((t) => (
+          <tr key={t.id}>
+            <td className="td font-medium">{t.name}</td>
+            <td className="td">{t.builder}</td>
+            <td className="td text-gray-400">{t.created_at}</td>
+            <td className="td text-right">
+              <button className="btn-ghost mr-2" onClick={() => open(t.id)}>Use</button>
+              <button className="text-gray-300 hover:text-red-500" onClick={() => del(t.id)}>✕</button>
             </td>
           </tr>
         ))}

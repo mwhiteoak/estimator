@@ -94,6 +94,10 @@ export const api = {
   },
   takeoff: (takeoff, pricing) => json('POST', '/takeoff', { takeoff, pricing }),
 
+  // Digitizer: user-calibrated scale + a rendered plan-page image -> wall segments.
+  digitizeWalls: (imageDataUrl, pxPerMetre, pageLabel) =>
+    json('POST', '/extract/digitize-walls', { image: imageDataUrl, pxPerMetre, pageLabel }),
+
   exportXlsx: async (takeoff, pricing) => {
     const res = await fetch(BASE + '/export', {
       method: 'POST',
@@ -123,4 +127,10 @@ export const api = {
   getJob: (id) => json('GET', `/jobs/${id}`),
   saveJob: (job) => json('POST', '/jobs', job),
   deleteJob: (id) => json('DELETE', `/jobs/${id}`),
+
+  // house-type templates
+  listTemplates: () => json('GET', '/templates'),
+  getTemplate: (id) => json('GET', `/templates/${id}`),
+  saveTemplate: (template) => json('POST', '/templates', template),
+  deleteTemplate: (id) => json('DELETE', `/templates/${id}`),
 };

@@ -268,6 +268,38 @@ are type hints, not literal values):
 ${JSON.stringify(SCHEMA_EXAMPLE, null, 2)}`;
 }
 
+// DIGITIZER — the user calibrates a scale by clicking two points a known
+// distance apart on a rendered plan page; we then send that EXACT rendered
+// image (so pixel space matches what the user clicked) and ask only for
+// pixel coordinates, never a length reading. The server converts pixels to
+// metres deterministically using the user's calibration — this sidesteps the
+// "read the tiny printed dimension string" failure mode entirely, since the
+// model only has to point at wall endpoints, not OCR text.
+export function buildWallDigitizeInstructions() {
+  return `You are looking at ONE PAGE of an architectural floor plan, rendered as an image.
+
+Identify every EXTERNAL WALL RUN visible on this page — a straight wall segment between two corners
+or intersections, matching the building's external perimeter (including any external garage or
+internal-to-external transitions). Do NOT include internal partition walls unless they form part of
+the external envelope (e.g. a garage-to-house common wall you can also list separately if asked).
+
+For each wall run, report the PIXEL coordinates of its two endpoints as measured directly on THIS
+image (origin at the top-left corner, x increases right, y increases down). Do not estimate or
+calculate a real-world length yourself — coordinates only, in image pixels. Also report the room or
+zone the wall run fronts (read the adjacent room label), and your best guess at compass orientation
+if the drawing shows one (N/S/E/W/NE/etc, or null if not shown).
+
+Be precise: click as close to the actual wall centreline or face as you can tell from the drawing —
+your pixel coordinates are the only measurement the code will use for this wall.
+
+Output ONLY this JSON object, no prose, no markdown fences:
+{
+  "walls": [
+    { "x1": number, "y1": number, "x2": number, "y2": number, "location": "string", "orientation": "string | null" }
+  ]
+}`;
+}
+
 // Defensive parse: strip ```json fences and parse. Throws with the raw text
 // attached so the route can surface it instead of crashing.
 export function parseExtraction(raw) {

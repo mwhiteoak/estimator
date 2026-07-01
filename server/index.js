@@ -13,6 +13,7 @@ import extract from './routes/extract.js';
 import takeoff from './routes/takeoff.js';
 import exportRoute from './routes/export.js';
 import jobs from './routes/jobs.js';
+import templates from './routes/templates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -29,6 +30,7 @@ app.use('/api/extract', extract);
 app.use('/api/takeoff', takeoff);
 app.use('/api/export', exportRoute);
 app.use('/api/jobs', jobs);
+app.use('/api/templates', templates);
 
 // Serve the built client if present (production / single-process mode).
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

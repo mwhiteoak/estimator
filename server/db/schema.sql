@@ -43,3 +43,15 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+-- House-type templates: a snapshot of a reviewed take-off (same builder,
+-- same base design) that a new lot can start from instead of a fresh AI
+-- extraction. Project-specific fields (address/lot/drawing) are cleared on
+-- load so the user re-enters them for the new site.
+CREATE TABLE IF NOT EXISTS templates (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,        -- e.g. 'Hancock — The Ashford 4 bed'
+  builder TEXT,
+  takeoff_json TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);

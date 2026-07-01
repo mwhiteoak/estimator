@@ -66,6 +66,26 @@ export default function App() {
     setStep(2);
   };
 
+  // Load a house-type template: keep the measurements, clear the site-specific
+  // project fields so the user re-enters them for the new lot.
+  const onLoadTemplate = (template) => {
+    const t = template.takeoff || {};
+    setTakeoff({
+      ...t,
+      project: {
+        ...t.project,
+        address: null, lot: null, plan_number: null, drawing_revision: null,
+        drawing_number: null, address_source: 'missing',
+      },
+      issue_actions: {},
+      user_resolutions: {},
+    });
+    setPricing({ mode: 'auto', builderId: null, lineOverrides: {} });
+    setBuilderMatch({ matched: false });
+    setMaxReached(2);
+    setStep(2);
+  };
+
   const reset = () => {
     setStep(0); setMaxReached(0); setFiles({ plansFile: null, energyFile: null });
     setTakeoff(null); setComputed(null); setBuilderMatch(null);
@@ -86,6 +106,7 @@ export default function App() {
           <div className="flex items-center gap-1">
             <button className="btn-ghost" onClick={() => setModal({ tab: 'products' })}>Price list</button>
             <button className="btn-ghost" onClick={() => setModal({ tab: 'jobs' })}>Jobs</button>
+            <button className="btn-ghost" onClick={() => setModal({ tab: 'templates' })}>Templates</button>
             <button className="btn-ghost" onClick={() => setModal({ tab: 'settings' })} title="Settings">⚙</button>
           </div>
         </div>
@@ -146,6 +167,7 @@ export default function App() {
           onClose={() => setModal(null)}
           onData={loadData}
           onLoadJob={onLoadJob}
+          onLoadTemplate={onLoadTemplate}
         />
       )}
     </div>
