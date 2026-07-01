@@ -43,6 +43,17 @@ const takeoffA = {
     { area_type: 'alfresco', area_m2: 19.66, r_value: 'R1.5', insulated: true, source: 'area_schedule', confidence: 'high' },
     { area_type: 'interfloor', area_m2: 110.0, r_value: null, insulated: false, source: 'floor_plan', confidence: 'high', notes: 'not insulated' },
   ],
+  // Wrap/continuous-item fixture numbers taken from the client's stated
+  // expected results for their sample job, to sanity-check the new take-off
+  // section end to end even without the real plan/EE report.
+  wall_wrap: [
+    { level: 'ground', location: 'Lower level external walls', wrap_type: 'foil sarking', area_m2: 126, source: 'schedule', confidence: 'high' },
+    { level: 'first', location: 'Upper level external walls', wrap_type: 'class 4 vapour-permeable wrap', area_m2: 127, source: 'schedule', confidence: 'high' },
+    { level: 'subfloor', location: 'Subfloor', wrap_type: 'class 4 vapour-permeable wrap', area_m2: 9, source: 'schedule', confidence: 'high' },
+  ],
+  continuous_items: [
+    { location: 'Upper level junctions', level: 'first', item_type: 'continuous draught seal', length_m: 25, source: 'schedule', confidence: 'high' },
+  ],
   assumptions: [{ topic: 'wall height', assumption: '2.7m for all GF external walls', basis: 'section', confidence: 'high' }],
   flags: [{ severity: 'info', message: 'Detailed external wall schedule used', location: 'global' }],
 };
@@ -61,7 +72,9 @@ console.log('summary:', JSON.stringify(resultA.measurements.summary, null, 2));
 console.log('quote available:', resultA.meta.quote_available, '| total:', resultA.quote?.total, '| anyUnpriced:', resultA.quote?.anyUnpriced);
 console.log('quote lines:');
 for (const l of resultA.quote.lines)
-  console.log(`  ${l.label.padEnd(26)} net=${String(l.net_m2).padStart(7)} ${l.product?.code || 'UNMATCHED'} ${l.supply_rate}/${l.install_rate} -> $${l.line_cost}`);
+  console.log(`  ${l.label.padEnd(26)} qty=${String(l.qty).padStart(7)} ${l.unit.padEnd(3)} ${l.product?.code || 'UNMATCHED'} ${l.supply_rate}/${l.install_rate} -> $${l.line_cost}`);
+console.log('wrap by level (expect ground=126, first=127, subfloor=9):', JSON.stringify(resultA.measurements.wallWrap.byLevel));
+console.log('continuous total (expect 25):', resultA.measurements.continuousItems.total);
 
 // Sanity checks
 const s = resultA.measurements.summary;

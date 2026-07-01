@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, FlagBadge } from './ui.jsx';
 
 export function ReviewIssue({ issue, onOpenPage, onResolve, onIgnore }) {
@@ -58,24 +58,68 @@ export function SourceCell({ row, onOpen }) {
 }
 
 export function PlanPreview({ fileUrl, source }) {
+  const [expanded, setExpanded] = useState(false);
   const src = useMemo(() => {
     if (!fileUrl) return null;
     return source?.page ? `${fileUrl}#page=${source.page}` : fileUrl;
   }, [fileUrl, source]);
+  const subtitle = source ? [source.sheet, source.table, source.snippet].filter(Boolean).join(' · ') || 'Selected source' : 'Select a source link from a row.';
 
   return (
-    <aside className="hidden xl:block">
-      <div className="sticky top-24 space-y-3">
-        <Card title="Plan source" subtitle={source ? [source.sheet, source.table, source.snippet].filter(Boolean).join(' · ') || 'Selected source' : 'Select a source link from a row.'}>
-          {src ? (
-            <iframe title="Plan preview" src={src} className="h-[620px] w-full rounded-lg border border-gray-200 bg-gray-50" />
-          ) : (
-            <div className="rounded-lg border border-dashed border-gray-200 p-6 text-sm text-gray-400">
-              The uploaded plans PDF will appear here after extraction.
+    <>
+      <aside className="hidden xl:block">
+        <div className="sticky top-24 space-y-3">
+          <Card
+            title="Plan source"
+            subtitle={subtitle}
+            action={
+              src && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10"
+                  title="Open full size"
+                >
+                  ⤢ Expand
+                </button>
+              )
+            }
+          >
+            {src ? (
+              <iframe title="Plan preview" src={src} className="h-[620px] w-full rounded-lg border border-gray-200 bg-gray-50" />
+            ) : (
+              <div className="rounded-lg border border-dashed border-gray-200 p-6 text-sm text-gray-400">
+                The uploaded plans PDF will appear here after extraction.
+              </div>
+            )}
+          </Card>
+        </div>
+      </aside>
+
+      {expanded && src && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 p-4 sm:p-6" onClick={() => setExpanded(false)}>
+          <div
+            className="flex h-full w-full flex-col overflow-hidden rounded-2xl bg-white shadow-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">Plan source</p>
+                <p className="truncate text-xs text-gray-500">{subtitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
+                title="Close"
+              >
+                ✕
+              </button>
             </div>
-          )}
-        </Card>
-      </div>
-    </aside>
+            <iframe title="Plan preview (expanded)" src={src} className="w-full flex-1 bg-gray-50" />
+          </div>
+        </div>
+      )}
+    </>
   );
 }

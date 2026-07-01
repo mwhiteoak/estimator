@@ -7,26 +7,10 @@
 //       price context is supplied with a real pricing mode. Otherwise quote=null.
 
 import { validateTakeoff } from './validation.js';
+import { round2, num, normMaterial, normLevel, normWrapLevel, normR } from './normalize.js';
 
 const MATERIALS = ['brick', 'hebel', 'lightweight'];
 const LEVELS = ['ground', 'first'];
-
-const num = (v) => {
-  const n = typeof v === 'string' ? parseFloat(v) : v;
-  return Number.isFinite(n) ? n : 0;
-};
-const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-
-function normMaterial(m) {
-  const s = (m || '').toLowerCase();
-  if (s.includes('brick')) return 'brick';
-  if (s.includes('hebel')) return 'hebel';
-  return 'lightweight';
-}
-function normLevel(l) {
-  const s = (l || '').toLowerCase();
-  return s.includes('first') || s.includes('upper') || s.includes('1') ? 'first' : 'ground';
-}
 
 // ---- (a) MEASUREMENTS ------------------------------------------------------
 
@@ -160,6 +144,72 @@ function computeCeilings(takeoff) {
   });
 }
 
+// `lightweightByLevel` is the already-measured net lightweight/cladding wall
+// area per level (ground/first), from computeExternalWalls. Wrap requirements
+// are near-always scoped to "cladded" walls, so when the AI correctly flags a
+// wrap requirement at a level but can't independently re-measure its area
+// (common — it already measured this once for walls_external), fall back to
+// that instead of silently pricing zero wrap.
+function computeWallWrap(takeoff, lightweightByLevel = {}) {
+  const rows = (takeoff.wall_wrap || []).map((w, i) => {
+    let area = w.area_m2 == null ? null : num(w.area_m2);
+    let areaSource = 'direct';
+    if (area == null && w.length_m != null && w.height_m != null) {
+      area = round2(num(w.length_m) * num(w.height_m));
+      areaSource = 'l_x_w';
+    }
+    return {
+      id: `wrap_${i}`,
+      level: normWrapLevel(w.level),
+      location: w.location || '',
+      wrap_type: w.wrap_type || '',
+      length_m: w.length_m == null ? null : num(w.length_m),
+      height_m: w.height_m == null ? null : num(w.height_m),
+      area_m2: area == null ? 0 : round2(area),
+      area_source: areaSource,
+      source: w.source || '',
+      source_ref: w.source_ref || sourceRefFromLegacy(w),
+      confidence: w.confidence || '',
+      notes: w.notes || '',
+    };
+  });
+
+  // Derive unmeasured ground/first wrap area from the cladding wall area,
+  // but only when there's exactly one unmeasured row at that level — with
+  // more than one we can't safely guess how to split the total between them.
+  for (const level of ['ground', 'first']) {
+    const levelRows = rows.filter((r) => r.level === level);
+    const unmeasured = levelRows.filter((r) => r.area_m2 <= 0);
+    if (unmeasured.length === 1 && levelRows.length === 1 && lightweightByLevel[level] > 0) {
+      unmeasured[0].area_m2 = round2(lightweightByLevel[level]);
+      unmeasured[0].area_source = 'derived_from_cladding_area';
+    }
+  }
+
+  const byLevel = { ground: 0, first: 0, subfloor: 0, gable: 0 };
+  for (const r of rows) byLevel[r.level] += r.area_m2;
+  for (const k of Object.keys(byLevel)) byLevel[k] = round2(byLevel[k]);
+  const total = round2(Object.values(byLevel).reduce((s, v) => s + v, 0));
+
+  return { rows, byLevel, total };
+}
+
+function computeContinuousItems(takeoff) {
+  const rows = (takeoff.continuous_items || []).map((c, i) => ({
+    id: `cont_${i}`,
+    level: c.level || '',
+    location: c.location || '',
+    item_type: c.item_type || '',
+    length_m: num(c.length_m),
+    source: c.source || '',
+    source_ref: c.source_ref || sourceRefFromLegacy(c),
+    confidence: c.confidence || '',
+    notes: c.notes || '',
+  }));
+  const total = round2(rows.reduce((s, r) => s + r.length_m, 0));
+  return { rows, total };
+}
+
 function buildMaterialBreakup(wallGroups, gables) {
   // Matrix material × level from wall net, plus gable area folded into material totals.
   const matrix = {};
@@ -188,12 +238,6 @@ function buildMaterialBreakup(wallGroups, gables) {
 }
 
 // ---- R-value resolution ----------------------------------------------------
-
-function normR(r) {
-  if (!r) return null;
-  const m = String(r).match(/R?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  return m ? m[1] : null;
-}
 
 function wallRequirementR(takeoff) {
   const reqs = takeoff.energy_report?.requirements || [];
@@ -284,8 +328,8 @@ function buildQuoteLines(takeoff, measurements, price) {
   const breakup = measurements.materialBreakup;
   const defWallR = wallRequirementR(takeoff);
 
-  const addLine = (id, label, category, rValue, net) => {
-    if (net <= 0) return;
+  const addLine = (id, label, category, rValue, qty, unit = 'm2') => {
+    if (qty <= 0) return;
     const ov = lineOverrides[id] || {};
     const rEff = ov.r_value || rValue || null;
     const product = hasOwn(ov, 'product_id')
@@ -297,13 +341,14 @@ function buildQuoteLines(takeoff, measurements, price) {
     const supply = rate.supply_rate;
     const install = rate.install_rate;
     const lineCost =
-      supply == null || install == null ? null : round2(net * (supply + install));
+      supply == null || install == null ? null : round2(qty * (supply + install));
     lines.push({
       id,
       label,
       category,
       r_value: rEff,
-      net_m2: round2(net),
+      qty: round2(qty),
+      unit,
       product: product ? { id: product.id, code: product.code, name: product.name } : null,
       supply_rate: supply,
       install_rate: install,
@@ -347,6 +392,19 @@ function buildQuoteLines(takeoff, measurements, price) {
     addLine(`ceiling:${c.id}`, `Ceiling — ${c.area_type}`, cat, c.r_value, c.area_m2);
   }
 
+  // Wall wrap — one rollup line per level, no R-value matching (wrap products
+  // aren't R-coded, so these are typically flagged for a manual product pick).
+  const LEVEL_LABEL = { ground: 'Lower', first: 'Upper', subfloor: 'Subfloor', gable: 'Gable' };
+  for (const [level, area] of Object.entries(measurements.wallWrap.byLevel)) {
+    if (area <= 0) continue;
+    const cat = level === 'subfloor' ? 'subfloor_wrap' : 'wall_wrap';
+    addLine(`wrap:${level}`, `${LEVEL_LABEL[level] || level} wrap`, cat, null, area, 'm2');
+  }
+
+  // Continuous / linear sealing items — single rollup line, measured in lineal metres.
+  const continuousTotal = measurements.continuousItems.total;
+  addLine('continuous:rollup', 'Continuous sealing / linear items', 'sealant', null, continuousTotal, 'lm');
+
   const anyUnpriced = lines.some((l) => l.line_cost == null);
   const total = anyUnpriced ? null : lines.reduce((s, l) => s + l.line_cost, 0);
   return { lines, total: total == null ? null : round2(total), anyUnpriced };
@@ -360,6 +418,12 @@ export function computeTakeoff(takeoff, options = {}) {
   const gables = computeGables(t);
   const garageInternal = computeGarageInternal(t);
   const ceilings = computeCeilings(t);
+  const lightweightByLevel = {
+    ground: externalWalls.groups['lightweight|ground']?.net_m2 || 0,
+    first: externalWalls.groups['lightweight|first']?.net_m2 || 0,
+  };
+  const wallWrap = computeWallWrap(t, lightweightByLevel);
+  const continuousItems = computeContinuousItems(t);
   const materialBreakup = buildMaterialBreakup(externalWalls.groups, gables);
 
   const ceilingInsulatedByType = {};
@@ -380,6 +444,8 @@ export function computeTakeoff(takeoff, options = {}) {
     gables,
     garageInternal,
     ceilings,
+    wallWrap,
+    continuousItems,
     materialBreakup,
     summary: {
       brick_hebel_m2: materialBreakup.brickHebel,
@@ -391,6 +457,12 @@ export function computeTakeoff(takeoff, options = {}) {
       ceiling_insulated_m2: round2(ceilingInsulatedTotal),
       ceiling_gross_m2: round2(ceilingGrossTotal),
       ceiling_insulated_by_type: ceilingInsulatedByType,
+      wrap_ground_m2: wallWrap.byLevel.ground,
+      wrap_first_m2: wallWrap.byLevel.first,
+      wrap_subfloor_m2: wallWrap.byLevel.subfloor,
+      wrap_gable_m2: wallWrap.byLevel.gable,
+      wrap_total_m2: wallWrap.total,
+      continuous_total_lm: continuousItems.total,
     },
   };
 

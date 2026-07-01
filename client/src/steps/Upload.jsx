@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { api } from '../lib/api.js';
 import { Card, Banner } from '../components/ui.jsx';
 
 function FileDrop({ label, file, onPick, optional }) {
@@ -45,8 +46,40 @@ function FileDrop({ label, file, onPick, optional }) {
 }
 
 export default function Upload({ files, setFiles, onNext }) {
-  const setPlans = (f) => setFiles((s) => ({ ...s, plansFile: f }));
-  const setEnergy = (f) => setFiles((s) => ({ ...s, energyFile: f }));
+  const [checking, setChecking] = useState(false);
+  const [addressCheck, setAddressCheck] = useState(null); // null | { plans, energyReport, status, score }
+
+  const setPlans = (f) => {
+    setFiles((s) => ({ ...s, plansFile: f }));
+    setAddressCheck(null);
+  };
+  const setEnergy = (f) => {
+    setFiles((s) => ({ ...s, energyFile: f }));
+    setAddressCheck(null);
+  };
+
+  const handleExtractClick = async () => {
+    // No report to compare against, or we've already run the check for this
+    // file pair (and the user is clicking through the warning) — go straight in.
+    if (!files.energyFile || addressCheck) {
+      onNext();
+      return;
+    }
+    setChecking(true);
+    try {
+      const result = await api.checkAddresses(files.plansFile, files.energyFile);
+      setAddressCheck(result);
+      if (result.status === 'match') onNext();
+    } catch {
+      // Don't let a failed pre-check block the pipeline — any real problem
+      // (bad key, etc.) will surface on the extraction screen anyway.
+      onNext();
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const mismatch = addressCheck && addressCheck.status !== 'match';
 
   return (
     <Card
@@ -67,9 +100,25 @@ export default function Upload({ files, setFiles, onNext }) {
         </div>
       )}
 
+      {mismatch && (
+        <div className="mt-4">
+          <Banner tone="warn" title={addressCheck.status === 'mismatch' ? "Addresses don't match" : 'Could not confirm the addresses match'}>
+            <div className="space-y-1">
+              <p>
+                {addressCheck.status === 'mismatch'
+                  ? "The address on the plans and the address on the energy report don't look like the same property. Double-check you've uploaded the right pair of documents before continuing."
+                  : "One of the documents didn't have a readable address, so we couldn't confirm the plans and the energy report describe the same property."}
+              </p>
+              <p><span className="font-medium">Plans:</span> {addressCheck.plans.address || '(no address found)'}</p>
+              <p><span className="font-medium">Energy report:</span> {addressCheck.energyReport.address || '(no address found)'}</p>
+            </div>
+          </Banner>
+        </div>
+      )}
+
       <div className="mt-6 flex justify-end">
-        <button className="btn-primary" disabled={!files.plansFile} onClick={onNext}>
-          Extract with Claude →
+        <button className="btn-primary" disabled={!files.plansFile || checking} onClick={handleExtractClick}>
+          {checking ? 'Checking documents…' : mismatch ? 'Continue anyway →' : 'Extract with Claude →'}
         </button>
       </div>
     </Card>

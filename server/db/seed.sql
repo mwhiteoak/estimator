@@ -19,7 +19,10 @@ INSERT INTO products (code, name, category, unit, default_supply_rate, default_i
   ('FIRE_R1.7_60',    'R1.7 60mm fire batts (zero-boundary)',        'special_wall',   'm2', 14.00, 8.00, 'e.g. HardieFire / HardieSmart boundary wall build-up',    1),
   ('FIRE_R2.0_BDY',   'R2.0 fire batts (boundary wall)',             'special_wall',   'm2', 16.00, 8.00, 'FRL-rated boundary wall',                                 1),
   ('ACOUS_WALL_R2.0', 'R2.0 acoustic wall batts',                    'acoustic',       'm2',  9.50, 4.50, 'Internal acoustic (wet areas, media, etc.)',              1),
+  ('WRAP_FOIL',       'Reflective foil sarking wall wrap',           'wall_wrap',      'm2',  3.20, 3.00, 'Reflective foil sarking to external framed walls',        1),
   ('WRAP_VP',         'Vapour-permeable wall wrap / sarking',        'wall_wrap',      'm2',  3.50, 3.00, 'Class 4 vapour-permeable sarking to cladded walls',       1),
+  ('WRAP_SUBFLOOR',   'Subfloor wrap',                               'subfloor_wrap',  'm2',  3.50, 3.50, 'Vapour-permeable wrap to suspended subfloor',             1),
+  ('SEAL_CONT',       'Continuous draught / gap sealing',            'sealant',        'lm',  2.00, 3.00, 'Continuous sealant/foam bead at specified junctions',     1),
   ('SARK_ANTIGLARE',  'Anti-glare roof sarking',                     'roof_sarking',   'm2',  3.00, 3.50, 'Anti-glare reflective sarking to underside of roof',      1);
 
 INSERT INTO builders (name, aliases, notes) VALUES

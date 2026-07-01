@@ -104,7 +104,7 @@ function SettingsTab({ onData }) {
 }
 
 const BLANK_PRODUCT = { code: '', name: '', category: 'external_wall', unit: 'm2', default_supply_rate: 0, default_install_rate: 0, notes: '' };
-const CATEGORIES = ['external_wall', 'garage_wall', 'ceiling', 'ceiling_outdoor', 'special_wall', 'acoustic', 'wall_wrap', 'roof_sarking'];
+const CATEGORIES = ['external_wall', 'garage_wall', 'ceiling', 'ceiling_outdoor', 'special_wall', 'acoustic', 'wall_wrap', 'subfloor_wrap', 'sealant', 'roof_sarking'];
 
 function ProductsTab({ onData }) {
   const [rows, setRows] = useState([]);
@@ -123,7 +123,7 @@ function ProductsTab({ onData }) {
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              <th className="th">Code</th><th className="th">Name</th><th className="th">Category</th>
+              <th className="th">Code</th><th className="th">Name</th><th className="th">Category</th><th className="th">Unit</th>
               <th className="th text-right">Supply $</th><th className="th text-right">Install $</th>
               <th className="th">Active</th><th className="th" />
             </tr>
@@ -136,6 +136,12 @@ function ProductsTab({ onData }) {
                 <td className="td">
                   <select className="cell-input" defaultValue={p.category} onChange={(e) => update(p.id, { category: e.target.value })}>
                     {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </td>
+                <td className="td">
+                  <select className="cell-input w-16" defaultValue={p.unit || 'm2'} onChange={(e) => update(p.id, { unit: e.target.value })}>
+                    <option value="m2">m²</option>
+                    <option value="lm">lm</option>
                   </select>
                 </td>
                 <td className="td"><input type="number" step="any" className="cell-input w-20 text-right" defaultValue={p.default_supply_rate} onBlur={(e) => update(p.id, { default_supply_rate: Number(e.target.value) })} /></td>
@@ -159,6 +165,12 @@ function ProductsTab({ onData }) {
               {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Mini>
+          <Mini label="Unit">
+            <select className="input w-20" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })}>
+              <option value="m2">m²</option>
+              <option value="lm">lm</option>
+            </select>
+          </Mini>
           <Mini label="Supply $"><input type="number" step="any" className="input w-24" value={draft.default_supply_rate} onChange={(e) => setDraft({ ...draft, default_supply_rate: Number(e.target.value) })} /></Mini>
           <Mini label="Install $"><input type="number" step="any" className="input w-24" value={draft.default_install_rate} onChange={(e) => setDraft({ ...draft, default_install_rate: Number(e.target.value) })} /></Mini>
           <button className="btn-primary" onClick={add}>Add</button>
@@ -178,7 +190,7 @@ function BuildersTab({ onData }) {
 
   const add = async () => { if (!name) return; await api.createBuilder({ name, aliases: [] }); setName(''); load(); onData?.(); };
   const del = async (id) => { await api.deleteBuilder(id); load(); onData?.(); };
-  const setRate = async (bid, pid, supply, install) => { await api.setBuilderRate(bid, pid, { supply_rate: supply, install_rate: install }); load(); };
+  const setRate = async (bid, pid, patch) => { await api.setBuilderRate(bid, pid, patch); load(); };
   const clearRate = async (bid, pid) => { await api.clearBuilderRate(bid, pid); load(); };
 
   return (
@@ -219,8 +231,8 @@ function BuildersTab({ onData }) {
                           <tr key={p.id}>
                             <td className="td">{p.code}</td>
                             <td className="td text-xs text-gray-400">{p.default_supply_rate}/{p.default_install_rate}</td>
-                            <td className="td"><input type="number" step="any" className="cell-input w-20" defaultValue={r?.supply_rate ?? ''} placeholder="—" onBlur={(e) => e.target.value !== '' && setRate(b.id, p.id, Number(e.target.value), r?.install_rate ?? p.default_install_rate)} /></td>
-                            <td className="td"><input type="number" step="any" className="cell-input w-20" defaultValue={r?.install_rate ?? ''} placeholder="—" onBlur={(e) => e.target.value !== '' && setRate(b.id, p.id, r?.supply_rate ?? p.default_supply_rate, Number(e.target.value))} /></td>
+                            <td className="td"><input type="number" step="any" className="cell-input w-20" defaultValue={r?.supply_rate ?? ''} placeholder="—" onBlur={(e) => e.target.value !== '' && setRate(b.id, p.id, { supply_rate: Number(e.target.value) })} /></td>
+                            <td className="td"><input type="number" step="any" className="cell-input w-20" defaultValue={r?.install_rate ?? ''} placeholder="—" onBlur={(e) => e.target.value !== '' && setRate(b.id, p.id, { install_rate: Number(e.target.value) })} /></td>
                             <td className="td">{r && <button className="text-xs text-gray-400 hover:text-red-500" onClick={() => clearRate(b.id, p.id)}>clear</button>}</td>
                           </tr>
                         );

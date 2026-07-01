@@ -1,23 +1,4 @@
-const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-const num = (v) => {
-  const n = typeof v === 'string' ? parseFloat(v) : v;
-  return Number.isFinite(n) ? n : 0;
-};
-const normMaterial = (m) => {
-  const s = (m || '').toLowerCase();
-  if (s.includes('brick')) return 'brick';
-  if (s.includes('hebel')) return 'hebel';
-  return 'lightweight';
-};
-const normLevel = (l) => {
-  const s = (l || '').toLowerCase();
-  return s.includes('first') || s.includes('upper') || s.includes('1') ? 'first' : 'ground';
-};
-const normR = (r) => {
-  if (!r) return null;
-  const m = String(r).match(/R?\s*([0-9]+(?:\.[0-9]+)?)/i);
-  return m ? m[1] : null;
-};
+import { round2, num, normMaterial, normLevel, normR } from './normalize.js';
 
 function issue(id, severity, message, target, fixHint, requiredInfo) {
   return { id, severity, message, target, fixHint, requiredInfo };
@@ -142,6 +123,95 @@ export function validateTakeoff(takeoff, measurements, quote) {
       );
     }
     if (key.trim() !== '|') seenReqs.set(key, r);
+  }
+
+  for (const [i, w] of (t.wall_wrap || []).entries()) {
+    const hasArea = w.area_m2 != null && num(w.area_m2) > 0;
+    const hasDims = w.length_m != null && w.height_m != null;
+    if (!hasArea && !hasDims) {
+      issues.push(
+        issue(
+          `wrap-missing-dim-${i}`,
+          'error',
+          `Wall wrap row "${w.location || i + 1}" has no area and no length/height.`,
+          { section: 'wall_wrap', index: i, field: 'area_m2', page: sourcePage(w) },
+          'Enter the total wrap area, or the length and height to compute it.',
+          'Enter the wrap area in m², or its length and height in metres.'
+        )
+      );
+    }
+    if (!w.wrap_type) {
+      issues.push(
+        issue(
+          `wrap-missing-type-${i}`,
+          'warn',
+          `Wall wrap row "${w.location || i + 1}" has no wrap type (e.g. foil sarking, class 4 wrap).`,
+          { section: 'wall_wrap', index: i, field: 'wrap_type', page: sourcePage(w) },
+          'Enter the wrap material named in the energy report or plans notes.',
+          'Enter the wrap type/material for this row.'
+        )
+      );
+    }
+  }
+
+  for (const [i, c] of (t.continuous_items || []).entries()) {
+    if (!c.length_m) {
+      issues.push(
+        issue(
+          `continuous-missing-dim-${i}`,
+          'error',
+          `Continuous item "${c.location || i + 1}" is missing its length.`,
+          { section: 'continuous_items', index: i, field: 'length_m', page: sourcePage(c) },
+          'Enter the lineal metres for this sealing/draught-sealing item.',
+          'Enter the length in lineal metres.'
+        )
+      );
+    }
+  }
+
+  for (const [i, w] of (t.walls_external || []).entries()) {
+    if (!w.length_m && (w.location || '').toLowerCase().includes('elevation')) {
+      issues.push(
+        issue(
+          `wall-whole-face-${i}`,
+          'warn',
+          `Wall row "${w.location || i + 1}" looks like a whole elevation face rather than an individual segment, and has no length.`,
+          { section: 'walls_external', index: i, field: 'length_m', page: sourcePage(w) },
+          'Break this face into individual wall runs using the floor plan dimension chain, or enter its length.',
+          'Enter the wall run length in metres, or split this row into individual segments.'
+        )
+      );
+    }
+  }
+
+  for (const [i, g] of (t.gables || []).entries()) {
+    if (!g.base_width_m) {
+      issues.push(
+        issue(
+          `gable-missing-dim-${i}`,
+          'error',
+          `Gable "${g.location || i + 1}" is missing its base width.`,
+          { section: 'gables', index: i, field: 'base_width_m', page: sourcePage(g) },
+          'Enter the gable base width in metres.',
+          'Enter the gable base width in metres, read from the elevation or floor plan.'
+        )
+      );
+    }
+  }
+
+  for (const [i, w] of (t.garage_internal_walls || []).entries()) {
+    if (!w.length_m || !w.height_m) {
+      issues.push(
+        issue(
+          `garage-wall-missing-dim-${i}`,
+          'error',
+          `Garage internal wall "${w.location || i + 1}" is missing length or height.`,
+          { section: 'garage_internal_walls', index: i, field: !w.length_m ? 'length_m' : 'height_m', page: sourcePage(w) },
+          'Enter the labelled or measured dimension.',
+          `Enter the missing ${!w.length_m ? 'length' : 'height'} in metres.`
+        )
+      );
+    }
   }
 
   const hasFirst = (t.walls_external || []).some((w) => normLevel(w.level) === 'first');

@@ -7,6 +7,9 @@ const products = [
   { id: 1, active: 1, category: 'external_wall', code: 'WALL_R2.0', name: 'Wall R2.0', default_supply_rate: 3, default_install_rate: 4 },
   { id: 2, active: 1, category: 'ceiling', code: 'CEIL_R3.5', name: 'Ceiling R3.5', default_supply_rate: 5, default_install_rate: 6 },
   { id: 3, active: 1, category: 'ceiling_outdoor', code: 'OUT_R1.5', name: 'Outdoor R1.5', default_supply_rate: 7, default_install_rate: 8 },
+  { id: 4, active: 1, category: 'wall_wrap', code: 'WRAP_VP', name: 'Vapour-permeable wrap', default_supply_rate: 3.5, default_install_rate: 3 },
+  { id: 5, active: 1, category: 'subfloor_wrap', code: 'WRAP_SF', name: 'Subfloor wrap', default_supply_rate: 3.5, default_install_rate: 3 },
+  { id: 6, active: 1, category: 'sealant', code: 'SEAL_CONT', name: 'Continuous draught seal', default_supply_rate: 2, default_install_rate: 1.5 },
 ];
 
 function fixture(overrides = {}) {
@@ -37,6 +40,71 @@ function fixture(overrides = {}) {
     ...overrides,
   };
 }
+
+test('computes wall wrap by level and continuous item totals, and prices them as unmatched-by-default lines', () => {
+  const result = computeTakeoff(
+    fixture({
+      wall_wrap: [
+        { level: 'ground', location: 'Lower walls', wrap_type: 'foil sarking', area_m2: 126, source: 'schedule', confidence: 'high' },
+        { level: 'first', location: 'Upper walls', wrap_type: 'class 4 wrap', area_m2: 127, source: 'schedule', confidence: 'high' },
+        { level: 'subfloor', location: 'Subfloor', wrap_type: 'class 4 wrap', area_m2: 9, source: 'schedule', confidence: 'high' },
+      ],
+      continuous_items: [
+        { location: 'Upper junctions', level: 'first', item_type: 'draught seal', length_m: 25, source: 'schedule', confidence: 'high' },
+      ],
+    }),
+    { pricing: { mode: 'auto', products, lineOverrides: {} } }
+  );
+
+  assert.deepEqual(result.measurements.wallWrap.byLevel, { ground: 126, first: 127, subfloor: 9, gable: 0 });
+  assert.equal(result.measurements.wallWrap.total, 262);
+  assert.equal(result.measurements.continuousItems.total, 25);
+  assert.equal(result.measurements.summary.wrap_total_m2, 262);
+  assert.equal(result.measurements.summary.continuous_total_lm, 25);
+
+  const wrapGround = result.quote.lines.find((l) => l.id === 'wrap:ground');
+  assert.equal(wrapGround.qty, 126);
+  assert.equal(wrapGround.unit, 'm2');
+  // No R-value to match against — wrap/sealant lines come back unmatched by
+  // default, same as any other unresolvable category, and get flagged.
+  assert.equal(wrapGround.product, null);
+  assert.equal(wrapGround.flagged, true);
+
+  const continuous = result.quote.lines.find((l) => l.id === 'continuous:rollup');
+  assert.equal(continuous.qty, 25);
+  assert.equal(continuous.unit, 'lm');
+});
+
+test('wall wrap with no measured area derives from the cladding wall area for that level', () => {
+  // Mirrors a real extraction: the AI correctly identifies a wrap requirement
+  // ("Class 4 vapour-permeable wrap to cladded external walls") from the
+  // energy report, but the plans/elevations give no printed wrap area — it
+  // shouldn't have to re-measure what walls_external already measured.
+  const withGroundCladding = fixture({
+    walls_external: [
+      { level: 'ground', location: 'front', material: 'brick', length_m: 10, height_m: 2.4, source: 'labelled', confidence: 'high' },
+      { level: 'ground', location: 'side', material: 'lightweight', length_m: 8, height_m: 2.4, source: 'labelled', confidence: 'high' },
+      { level: 'first', location: 'upper', material: 'lightweight', length_m: 5, height_m: 2.4, source: 'labelled', confidence: 'high' },
+    ],
+    wall_wrap: [
+      { level: 'ground', location: 'Cladded ground floor walls', wrap_type: 'class 4 vapour-permeable wrap', source: 'schedule', confidence: 'medium' },
+    ],
+  });
+  const result = computeTakeoff(withGroundCladding, { pricing: { mode: 'none' } });
+  assert.equal(result.measurements.externalWalls.groups['lightweight|ground'].net_m2, 19.2); // 8 * 2.4
+  assert.equal(result.measurements.wallWrap.byLevel.ground, 19.2);
+  assert.equal(result.measurements.wallWrap.rows[0].area_source, 'derived_from_cladding_area');
+
+  // A row that DOES give a direct area is never overridden by the fallback.
+  const directArea = computeTakeoff(
+    fixture({
+      wall_wrap: [{ level: 'ground', location: 'x', wrap_type: 'foil', area_m2: 5, source: 'schedule', confidence: 'high' }],
+    }),
+    { pricing: { mode: 'none' } }
+  );
+  assert.equal(directArea.measurements.wallWrap.rows[0].area_source, 'direct');
+  assert.equal(directArea.measurements.wallWrap.byLevel.ground, 5);
+});
 
 test('computes wall door deductions, gables, garage, and ceiling totals', () => {
   const result = computeTakeoff(fixture(), { pricing: { mode: 'none' } });
@@ -90,8 +158,8 @@ test('workbook quote formulas leave incomplete totals blank', async () => {
   const result = computeTakeoff(fixture(), { pricing: { mode: 'auto', products, lineOverrides: {} } });
   const wb = await buildWorkbook(result);
   const quote = wb.getWorksheet('Quote');
-  const firstLineFormula = quote.getRow(2).getCell(7).value.formula;
-  const totalFormula = quote.getRow(quote.rowCount).getCell(7).value.formula;
+  const firstLineFormula = quote.getRow(2).getCell(8).value.formula;
+  const totalFormula = quote.getRow(quote.rowCount).getCell(8).value.formula;
   assert.match(firstLineFormula, /IF\(OR/);
   assert.match(totalFormula, /COUNTBLANK/);
 });

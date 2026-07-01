@@ -64,14 +64,21 @@ router.delete('/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// Upsert / clear a builder's per-product rate override.
+// Upsert / clear a builder's per-product rate override. Either field may be
+// omitted to leave it untouched (e.g. editing just the supply rate doesn't
+// pin the install rate to whatever the default happens to be right now).
 router.put('/:id/rates/:productId', (req, res) => {
   const { supply_rate, install_rate } = req.body || {};
+  const existing = db
+    .prepare('SELECT * FROM builder_rates WHERE builder_id = ? AND product_id = ?')
+    .get(req.params.id, req.params.productId);
+  const nextSupply = supply_rate !== undefined ? num(supply_rate) : existing?.supply_rate ?? null;
+  const nextInstall = install_rate !== undefined ? num(install_rate) : existing?.install_rate ?? null;
   db.prepare(
     `INSERT INTO builder_rates (builder_id, product_id, supply_rate, install_rate)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(builder_id, product_id) DO UPDATE SET supply_rate=excluded.supply_rate, install_rate=excluded.install_rate`
-  ).run(req.params.id, req.params.productId, num(supply_rate), num(install_rate));
+  ).run(req.params.id, req.params.productId, nextSupply, nextInstall);
   res.json(builderWithRates(req.params.id));
 });
 

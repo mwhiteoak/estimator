@@ -26,7 +26,7 @@ export default function RatesQuote({ pricing, setPricing, computed, products, bu
     setSaveMsg('Saving…');
     try {
       for (const l of quote.lines) {
-        if (l.product && l.supply_rate != null) {
+        if (l.product && l.supply_rate != null && l.install_rate != null) {
           await api.setBuilderRate(activeBuilder.id, l.product.id, { supply_rate: l.supply_rate, install_rate: l.install_rate });
         }
       }
@@ -133,9 +133,9 @@ export default function RatesQuote({ pricing, setPricing, computed, products, bu
                     <th className="th">Line</th>
                     <th className="th">Product</th>
                     <th className="th w-20">R-value</th>
-                    <th className="th w-20 text-right">Net m²</th>
-                    <th className="th w-28 text-right">Supply $/m²</th>
-                    <th className="th w-28 text-right">Install $/m²</th>
+                    <th className="th w-20 text-right">Qty</th>
+                    <th className="th w-28 text-right">Supply $</th>
+                    <th className="th w-28 text-right">Install $</th>
                     <th className="th w-24 text-right">Line $</th>
                   </tr>
                 </thead>
@@ -164,7 +164,7 @@ export default function RatesQuote({ pricing, setPricing, computed, products, bu
                             onChange={(e) => setLineOverride(l.id, { r_value: e.target.value })}
                           />
                         </td>
-                        <td className="td text-right tabular-nums">{n2(l.net_m2)}</td>
+                        <td className="td text-right tabular-nums">{n2(l.qty)} <span className="text-gray-400">{l.unit === 'lm' ? 'lm' : 'm²'}</span></td>
                         <td className="td">
                           <input
                             type="number" step="any"

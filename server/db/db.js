@@ -21,4 +21,26 @@ if (productCount === 0) {
   console.log('[db] Seeded price list + sample builders from seed.sql');
 }
 
+// Lightweight migration: add starter products for categories introduced after
+// the initial seed, without touching a database that's already been edited.
+// Insert-if-missing by code, so this is safe to run on every startup.
+const NEW_DEFAULT_PRODUCTS = [
+  ['WRAP_FOIL', 'Reflective foil sarking wall wrap', 'wall_wrap', 'm2', 3.2, 3.0, 'Reflective foil sarking to external framed walls'],
+  ['WRAP_SUBFLOOR', 'Subfloor wrap', 'subfloor_wrap', 'm2', 3.5, 3.5, 'Vapour-permeable wrap to suspended subfloor'],
+  ['SEAL_CONT', 'Continuous draught / gap sealing', 'sealant', 'lm', 2.0, 3.0, 'Continuous sealant/foam bead at specified junctions'],
+];
+const hasProductCode = db.prepare('SELECT 1 FROM products WHERE code = ?');
+const insertProduct = db.prepare(
+  `INSERT INTO products (code, name, category, unit, default_supply_rate, default_install_rate, notes, active)
+   VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+);
+if (productCount > 0) {
+  for (const p of NEW_DEFAULT_PRODUCTS) {
+    if (!hasProductCode.get(p[0])) {
+      insertProduct.run(...p);
+      console.log(`[db] Added new default product ${p[0]} (${p[2]})`);
+    }
+  }
+}
+
 export default db;

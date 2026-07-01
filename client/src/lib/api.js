@@ -41,6 +41,17 @@ export const api = {
   setBuilderRate: (id, productId, rate) => json('PUT', `/builders/${id}/rates/${productId}`, rate),
   clearBuilderRate: (id, productId) => json('DELETE', `/builders/${id}/rates/${productId}`),
 
+  // Quick pre-check: does the plans address match the energy report address?
+  checkAddresses: async (plansFile, energyFile) => {
+    const fd = new FormData();
+    fd.append('plans', plansFile);
+    fd.append('energyReport', energyFile);
+    const res = await fetch(BASE + '/extract/check-address', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw Object.assign(new Error(data?.error || res.statusText), { data, status: res.status });
+    return data;
+  },
+
   // pipeline — streams NDJSON progress events; onEvent(evt) is called per event.
   extract: async (plansFile, energyFile, onEvent) => {
     const fd = new FormData();

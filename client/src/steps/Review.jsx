@@ -5,9 +5,10 @@ import { PlanPreview, ReviewIssue, SourceCell } from '../components/PlanReview.j
 
 const MATERIALS = ['lightweight', 'brick', 'hebel'];
 const LEVELS = ['ground', 'first'];
+const WRAP_LEVELS = ['ground', 'first', 'subfloor', 'gable'];
 const SOURCES = ['labelled', 'scaled', 'schedule', 'code', 'area_schedule', 'floor_plan'];
 const CONF = ['high', 'medium', 'low'];
-const REQ_ELEMENTS = ['external_wall', 'special_wall', 'garage_wall', 'ceiling', 'ceiling_outdoor', 'roof'];
+const REQ_ELEMENTS = ['external_wall', 'special_wall', 'garage_wall', 'ceiling', 'ceiling_outdoor', 'roof', 'wall_wrap', 'subfloor_wrap', 'continuous_sealing'];
 
 const n2 = (v) => (v == null || isNaN(v) ? '' : Number(v).toFixed(2));
 
@@ -116,6 +117,11 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
               <Total label="Garage internal" value={s.garage_internal_m2} />
               <Total label="Ceiling insulated" value={s.ceiling_insulated_m2} />
               <Total label="Ceiling gross" value={s.ceiling_gross_m2} muted />
+              <Total label="Wrap — lower" value={s.wrap_ground_m2} />
+              <Total label="Wrap — upper" value={s.wrap_first_m2} />
+              <Total label="Wrap — subfloor" value={s.wrap_subfloor_m2} />
+              <Total label="Wrap — gable" value={s.wrap_gable_m2} muted />
+              <Total label="Continuous items" value={s.continuous_total_lm} unit="lm" />
             </dl>
           )}
           <div className="mt-4 flex flex-wrap justify-between gap-2">
@@ -295,6 +301,52 @@ export default function Review({ takeoff, setTakeoff, computed, builderMatch, pl
             empty="No ceilings"
           />
         </Card>
+
+        <Card id="wall_wrap" title="Wall wrap" subtitle="Sarking/vapour wrap by level — lower (ground), upper (first), subfloor, or gable. Area = length × height when no direct figure is given.">
+          <EditableTable
+            columns={[
+              { key: 'level', label: 'Level', type: 'select', options: WRAP_LEVELS, width: 100 },
+              { key: 'location', label: 'Location', type: 'text' },
+              { key: 'wrap_type', label: 'Wrap type', type: 'text', width: 160 },
+              { key: 'length_m', label: 'Length m', type: 'number', width: 90 },
+              { key: 'height_m', label: 'Height m', type: 'number', width: 90 },
+              { key: 'area_m2', label: 'Area m²', type: 'number', width: 90 },
+              { key: 'source', label: 'Source', type: 'select', options: SOURCES, allowEmpty: true, width: 110 },
+              sourceCol(),
+              { key: 'confidence', label: 'Conf.', type: 'select', options: CONF, allowEmpty: true, width: 90 },
+              { key: 'notes', label: 'Notes / user input', type: 'text' },
+            ]}
+            rows={t.wall_wrap || []}
+            onChange={(rows) => setSection('wall_wrap', rows)}
+            onAdd={() => setSection('wall_wrap', [...(t.wall_wrap || []), { level: 'ground', location: '', wrap_type: '', length_m: null, height_m: null, area_m2: null, source: 'schedule', confidence: 'high' }])}
+            onRemove={(i) => setSection('wall_wrap', t.wall_wrap.filter((_, idx) => idx !== i))}
+            rowFlagged={(r) => !r.wrap_type || (r.area_m2 == null && (r.length_m == null || r.height_m == null))}
+            addLabel="Add wrap row"
+            empty="No wall wrap"
+          />
+        </Card>
+
+        <Card id="continuous_items" title="Continuous / linear items" subtitle="Draught sealing, expanding foam, or acoustic sealant measured in lineal metres rather than area.">
+          <EditableTable
+            columns={[
+              { key: 'location', label: 'Location', type: 'text' },
+              { key: 'level', label: 'Level', type: 'text', width: 100 },
+              { key: 'item_type', label: 'Item type', type: 'text', width: 180 },
+              { key: 'length_m', label: 'Length (lm)', type: 'number', width: 100 },
+              { key: 'source', label: 'Source', type: 'select', options: SOURCES, allowEmpty: true, width: 110 },
+              sourceCol(),
+              { key: 'confidence', label: 'Conf.', type: 'select', options: CONF, allowEmpty: true, width: 90 },
+              { key: 'notes', label: 'Notes / user input', type: 'text' },
+            ]}
+            rows={t.continuous_items || []}
+            onChange={(rows) => setSection('continuous_items', rows)}
+            onAdd={() => setSection('continuous_items', [...(t.continuous_items || []), { location: '', level: '', item_type: '', length_m: null, source: 'schedule', confidence: 'high' }])}
+            onRemove={(i) => setSection('continuous_items', t.continuous_items.filter((_, idx) => idx !== i))}
+            rowFlagged={(r) => !r.length_m}
+            addLabel="Add continuous item"
+            empty="No continuous / linear items"
+          />
+        </Card>
       </div>
 
       <PlanPreview fileUrl={plansUrl} source={selectedSource} />
@@ -311,11 +363,11 @@ function Field({ label, value, onChange }) {
   );
 }
 
-function Total({ label, value, muted }) {
+function Total({ label, value, muted, unit = 'm²' }) {
   return (
     <div className="rounded-lg bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
       <dt className={`text-xs ${muted ? 'text-gray-400' : 'text-gray-500'}`}>{label}</dt>
-      <dd className={`mt-1 tabular-nums font-semibold ${muted ? 'text-gray-400' : 'text-gray-900'}`}>{n2(value)} m²</dd>
+      <dd className={`mt-1 tabular-nums font-semibold ${muted ? 'text-gray-400' : 'text-gray-900'}`}>{n2(value)} {unit}</dd>
     </div>
   );
 }

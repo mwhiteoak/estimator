@@ -74,6 +74,14 @@ export async function buildWorkbook(result) {
   const ce = wb.addWorksheet('Ceilings', { views: [{ state: 'frozen', ySplit: 1 }] });
   buildCeilings(ce, m);
 
+  // ----- Wall Wrap -----
+  const ww = wb.addWorksheet('Wall Wrap', { views: [{ state: 'frozen', ySplit: 1 }] });
+  buildWallWrap(ww, m);
+
+  // ----- Continuous Items -----
+  const ci = wb.addWorksheet('Continuous Items', { views: [{ state: 'frozen', ySplit: 1 }] });
+  buildContinuousItems(ci, m);
+
   // ----- Quote (conditional) -----
   if (hasQuote) {
     const q = wb.addWorksheet('Quote', { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -219,10 +227,49 @@ function buildCeilings(ws, m) {
   }
 }
 
-function buildQuote(ws, result) {
-  setCols(ws, [28, 30, 10, 12, 13, 13, 14, 30]);
+function buildWallWrap(ws, m) {
+  setCols(ws, [12, 22, 24, 11, 11, 11, 12, 14, 30, 10, 14, 18, 32]);
   const header = ws.addRow([
-    'Line', 'Product', 'R-value', 'Net m²', 'Supply $/m²', 'Install $/m²', 'Line $', 'Notes',
+    'Level', 'Location', 'Wrap Type', 'Length (m)', 'Height (m)', 'Area m²', 'Source', 'Confidence', 'Notes',
+    'Source Page', 'Source Sheet', 'Source Table', 'Source Snippet',
+  ]);
+  styleHeaderRow(header);
+  for (const w of m.wallWrap.rows) {
+    const row = ws.addRow([
+      w.level, w.location, w.wrap_type, w.length_m, w.height_m, null,
+      w.source, w.confidence, w.notes, ...sourceCells(w),
+    ]);
+    const n = row.number;
+    if (w.area_source === 'l_x_w') {
+      row.getCell(6).value = { formula: `D${n}*E${n}` };
+    } else {
+      row.getCell(6).value = w.area_m2;
+    }
+    [4, 5, 6].forEach((cc) => (row.getCell(cc).numFmt = M2));
+    if (lowConfidence(w.confidence)) row.eachCell((cell) => (cell.fill = FLAG_FILL));
+  }
+}
+
+function buildContinuousItems(ws, m) {
+  setCols(ws, [22, 12, 24, 12, 11, 14, 30, 10, 14, 18, 32]);
+  const header = ws.addRow([
+    'Location', 'Level', 'Item Type', 'Length (m)', 'Source', 'Confidence', 'Notes',
+    'Source Page', 'Source Sheet', 'Source Table', 'Source Snippet',
+  ]);
+  styleHeaderRow(header);
+  for (const c of m.continuousItems.rows) {
+    const row = ws.addRow([
+      c.location, c.level, c.item_type, c.length_m, c.source, c.confidence, c.notes, ...sourceCells(c),
+    ]);
+    row.getCell(4).numFmt = M2;
+    if (lowConfidence(c.confidence)) row.eachCell((cell) => (cell.fill = FLAG_FILL));
+  }
+}
+
+function buildQuote(ws, result) {
+  setCols(ws, [28, 30, 10, 10, 8, 13, 13, 14, 30]);
+  const header = ws.addRow([
+    'Line', 'Product', 'R-value', 'Qty', 'Unit', 'Supply $', 'Install $', 'Line $', 'Notes',
   ]);
   styleHeaderRow(header);
   const lines = result.quote.lines;
@@ -233,7 +280,8 @@ function buildQuote(ws, result) {
       l.label,
       l.product ? `${l.product.code} — ${l.product.name}` : '(unmatched — set product/rate)',
       l.r_value || '',
-      l.net_m2,
+      l.qty,
+      l.unit || 'm2',
       l.supply_rate,
       l.install_rate,
       null,
@@ -242,19 +290,19 @@ function buildQuote(ws, result) {
     const n = row.number;
     if (firstDataRow == null) firstDataRow = n;
     lastDataRow = n;
-    row.getCell(7).value = { formula: `IF(OR(E${n}="",F${n}=""),"",D${n}*(E${n}+F${n}))` };
-    [4].forEach((c) => (row.getCell(c).numFmt = M2));
-    [5, 6, 7].forEach((c) => (row.getCell(c).numFmt = MONEY));
+    row.getCell(8).value = { formula: `IF(OR(F${n}="",G${n}=""),"",D${n}*(F${n}+G${n}))` };
+    row.getCell(4).numFmt = M2;
+    [6, 7, 8].forEach((c) => (row.getCell(c).numFmt = MONEY));
     if (l.flagged) row.eachCell((c) => (c.fill = FLAG_FILL));
   }
   if (firstDataRow != null) {
-    const totalRow = ws.addRow(['', '', '', '', '', 'Quote total', null, '']);
-    totalRow.getCell(7).value = {
-      formula: `IF(COUNTBLANK(G${firstDataRow}:G${lastDataRow})>0,"",SUM(G${firstDataRow}:G${lastDataRow}))`,
+    const totalRow = ws.addRow(['', '', '', '', '', '', 'Quote total', null, '']);
+    totalRow.getCell(8).value = {
+      formula: `IF(COUNTBLANK(H${firstDataRow}:H${lastDataRow})>0,"",SUM(H${firstDataRow}:H${lastDataRow}))`,
     };
-    totalRow.getCell(7).numFmt = MONEY;
+    totalRow.getCell(8).numFmt = MONEY;
     totalRow.font = { bold: true };
-    totalRow.getCell(6).font = { bold: true };
+    totalRow.getCell(7).font = { bold: true };
   }
 }
 
@@ -291,6 +339,11 @@ function buildSummary(ws, result, hasQuote) {
     ['Garage internal walls m²', { formula: `SUM(${GA}!F:F)` }, 'Garage Internal', M2],
     ['Ceiling insulated m²', { formula: `SUMIFS(${CE}!E:E,${CE}!G:G,"Yes")` }, 'Ceilings', M2],
     ['Ceiling gross m²', { formula: `SUM(${CE}!E:E)` }, 'Ceilings', M2],
+    ['Wall wrap — lower/ground m²', { formula: `SUMIF('Wall Wrap'!A:A,"ground",'Wall Wrap'!F:F)` }, 'Wall Wrap', M2],
+    ['Wall wrap — upper/first m²', { formula: `SUMIF('Wall Wrap'!A:A,"first",'Wall Wrap'!F:F)` }, 'Wall Wrap', M2],
+    ['Subfloor wrap m²', { formula: `SUMIF('Wall Wrap'!A:A,"subfloor",'Wall Wrap'!F:F)` }, 'Wall Wrap', M2],
+    ['Gable wrap m²', { formula: `SUMIF('Wall Wrap'!A:A,"gable",'Wall Wrap'!F:F)` }, 'Wall Wrap', M2],
+    ['Continuous items total (lm)', { formula: `SUM('Continuous Items'!D:D)` }, 'Continuous Items', M2],
   ];
   for (const [label, val, src, fmt] of rows) {
     const row = ws.addRow([label, val, src]);
@@ -298,7 +351,7 @@ function buildSummary(ws, result, hasQuote) {
   }
 
   if (hasQuote) {
-    const q = ws.addRow(['Quote total', { formula: 'SUMIF(Quote!F:F,"Quote total",Quote!G:G)' }, 'Quote']);
+    const q = ws.addRow(['Quote total', { formula: 'SUMIF(Quote!G:G,"Quote total",Quote!H:H)' }, 'Quote']);
     q.getCell(2).numFmt = MONEY;
     q.font = { bold: true };
   } else {
@@ -351,6 +404,10 @@ function buildAssumptions(ws, result, hasQuote) {
   for (const c of m.ceilings) {
     if ((c.source || '').toLowerCase() === 'scaled' || lowConfidence(c.confidence))
       scaled.push([`Ceiling: ${c.area_type}`, c.source, c.confidence]);
+  }
+  for (const w of m.wallWrap.rows) {
+    if ((w.source || '').toLowerCase() === 'scaled' || lowConfidence(w.confidence))
+      scaled.push([`Wall wrap: ${w.location} (${w.level})`, w.source, w.confidence]);
   }
   if (scaled.length) {
     ws.addRow([]);

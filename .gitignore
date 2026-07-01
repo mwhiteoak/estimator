@@ -12,3 +12,6 @@ client/dist/
 # Misc
 .DS_Store
 *.log
+
+# Local Claude Code settings (machine-specific permissions)
+.claude/settings.local.json

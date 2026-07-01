@@ -4,15 +4,69 @@ import db from '../db/db.js';
 import { readConfig } from '../lib/config.js';
 import { streamExtraction, pdfBlock } from '../lib/anthropic.js';
 import {
+  buildAddressCheckInstructions,
   buildEnergyInstructions,
   buildPlansInstructions,
   buildProjectPreviewInstructions,
   parseExtraction,
 } from '../lib/extractionPrompt.js';
 import { matchBuilder } from '../lib/fuzzyMatch.js';
+import { compareAddresses } from '../lib/addressMatch.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// POST /api/extract/check-address  (multipart: plans=<pdf> energyReport=<pdf>)
+// Cheap pre-check run before the full pipeline: does the site address on the
+// plans match the one on the energy report? Lets the UI flag a probable
+// wrong-file-pair upload before burning the expensive extraction pass on it.
+router.post(
+  '/check-address',
+  upload.fields([
+    { name: 'plans', maxCount: 1 },
+    { name: 'energyReport', maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const plans = req.files?.plans?.[0];
+    const energy = req.files?.energyReport?.[0];
+    if (!plans || !energy) {
+      return res.status(400).json({ error: 'Both a plans PDF and an energyReport PDF are required.' });
+    }
+
+    const { apiKey, energyModel } = readConfig();
+    if (!apiKey) return res.status(400).json({ error: 'No Anthropic API key configured. Add one in Settings.', code: 'NO_API_KEY' });
+
+    try {
+      const [plansRun, energyRun] = await Promise.all([
+        streamExtraction({
+          content: [pdfBlock(plans.buffer.toString('base64'), 'Architectural plans'), { type: 'text', text: buildAddressCheckInstructions('plans') }],
+          model: energyModel,
+          maxTokens: 500,
+        }),
+        streamExtraction({
+          content: [pdfBlock(energy.buffer.toString('base64'), 'Energy report'), { type: 'text', text: buildAddressCheckInstructions('energy_report') }],
+          model: energyModel,
+          maxTokens: 500,
+        }),
+      ]);
+
+      const plansInfo = parseExtraction(plansRun.text);
+      const energyInfo = parseExtraction(energyRun.text);
+      const cmp = compareAddresses(plansInfo.address, energyInfo.address);
+
+      res.json({
+        plans: { address: plansInfo.address, confidence: plansInfo.confidence },
+        energyReport: { address: energyInfo.address, confidence: energyInfo.confidence },
+        status: cmp.status,
+        score: cmp.score,
+      });
+    } catch (e) {
+      const code = e.status === 401 ? 'BAD_KEY' : e.code || undefined;
+      const msg = e.status === 401 ? 'Anthropic rejected the API key (401).' : `Address check failed: ${e.message}`;
+      res.status(500).json({ error: msg, code });
+    }
+  }
+);
 
 // POST /api/extract  (multipart: plans=<pdf> [energyReport=<pdf>])
 // Streams newline-delimited JSON progress events, then a final {type:'done'}.
@@ -148,9 +202,16 @@ router.post(
         };
       }
 
-      // Merge the distilled energy report back in (Pass A is the source of truth for it).
+      // Merge the distilled energy report back in (Pass A is the source of truth for
+      // it), but keep any plans-vs-report conflicts Pass B still surfaced rather than
+      // dropping them when its energy_report object gets replaced wholesale.
       if (energyReport) {
-        takeoff.energy_report = { present: true, ...energyReport };
+        const plansConflicts = takeoff.energy_report?.conflicts || [];
+        takeoff.energy_report = {
+          present: true,
+          ...energyReport,
+          conflicts: [...(energyReport.conflicts || []), ...plansConflicts],
+        };
       } else {
         takeoff.energy_report = takeoff.energy_report || { present: Boolean(energy) };
         if (!energy) takeoff.energy_report.present = false;
